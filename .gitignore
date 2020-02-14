@@ -1,0 +1,4 @@
+src/__pycache__/*
+src/.ipynb_checkpoints/*
+docker/talib_kite/*
+docker/talib_kite_alpine/*

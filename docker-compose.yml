@@ -1,0 +1,39 @@
+version: '3'
+services:
+  web:
+    image: suhansaha/talib_kite
+    command: gunicorn  --bind 0.0.0.0:5000 --reload wsgi:app
+    restart: always
+    volumes:
+      - ./src:/code
+    expose:
+      - 5000
+    environment:
+      FLASK_ENV: development
+    depends_on:
+      - redis
+      - db
+    restart: always
+  jupyter:
+    image: suhansaha/talib_kite
+    command: jupyter notebook --config=/code/jupyter_notebook_config.py --ip=0.0.0.0 --port=8888
+    restart: always
+    volumes:
+        - ./src:/code
+    expose:
+        - 8888
+  db:
+    image: postgres
+    restart: always
+    environment:
+      POSTGRES_PASSWORD: 'suhan005'
+  redis:
+    image: "redis:alpine"
+    restart: always
+  nginx:
+    build: ./docker/nginx
+    ports:
+      - 80:80
+    depends_on:
+      - web
+      - jupyter
