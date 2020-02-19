@@ -1,0 +1,25 @@
+<<<<<<< HEAD
+plot/*
+*.pdf
+.ipynb_checkpoints
+.ipynb_checkpoints/*
+kite_data/*.h5
+kite_data/livestream.csv
+kite_data/livestreamohlc.csv
+kite_data/recommendation.csv
+log
+log/*
+*.swp
+=======
+plot/*
+*.pdf
+.ipynb_checkpoints
+.ipynb_checkpoints/*
+kite_data/*.h5
+kite_data/livestream.csv
+kite_data/livestreamohlc.csv
+kite_data/recommendation.csv
+log
+log/*
+*.h5
+>>>>>>> 1e2b1bd28a9611e9d2d43303f8b14a0d5abc7023

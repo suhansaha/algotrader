@@ -1,0 +1,57 @@
+<<<<<<< HEAD
+<html>
+<script>
+function get_url(){
+	//var str = 'http://localhost:8888/view/redirect.html?request_token=gmfhyoKqwbdZ2CGZJIRk6qHe9GiKFxrv&action=login&status=success' 
+	var patt = /request_token=(.*)&action/i;
+	var str = window.location
+	var token = str.match(patt)
+	
+	
+	
+	document.getElementById('url').innerHTML = str + "<hr>"
+	document.getElementById('target').innerHTML = token[1]
+	//alert(document.cookie)
+	document.cookie += "kite_token="+token[1]
+}
+
+</script>
+<body onload="get_url()">
+Suhan Saha
+
+<!---
+http://localhost:8888/view/redirect.html?request_token=gmfhyoKqwbdZ2CGZJIRk6qHe9GiKFxrv&action=login&status=success-->
+
+<div id="url"></div>
+<div id="target"></div>
+</body>
+</html>
+=======
+<html>
+<script>
+function get_url(){
+	//var str = 'http://localhost:8888/view/redirect.html?request_token=gmfhyoKqwbdZ2CGZJIRk6qHe9GiKFxrv&action=login&status=success' 
+	var patt = /request_token=(.*)&action/i;
+	var str = window.location
+	var token = str.match(patt)
+	
+	
+	
+	document.getElementById('url').innerHTML = str + "<hr>"
+	document.getElementById('target').innerHTML = token[1]
+	//alert(document.cookie)
+	document.cookie += "kite_token="+token[1]
+}
+
+</script>
+<body onload="get_url()">
+Suhan Saha
+
+<!---
+http://localhost:8888/view/redirect.html?request_token=gmfhyoKqwbdZ2CGZJIRk6qHe9GiKFxrv&action=login&status=success-->
+
+<div id="url"></div>
+<div id="target"></div>
+</body>
+</html>
+>>>>>>> 1e2b1bd28a9611e9d2d43303f8b14a0d5abc7023
