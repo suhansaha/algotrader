@@ -49,6 +49,7 @@ RUN pip install TA-lib
 #build-base postgresql-dev libffi-dev linux-headers \
 #gfortran perl libgcc libquadmath musl libgfortran lapack-dev \
 #gcc py-pip freetype-dev libpng-dev openblas-dev 
+RUN pip install eventlet
 
 WORKDIR /code
 # Expose port 5000 for gunicorn and 8888 for Jupyter
