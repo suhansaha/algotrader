@@ -9,7 +9,7 @@ RUN apk update
 RUN apk --no-cache --update-cache add alpine-sdk musl-dev wget git \
 build-base postgresql-dev libffi-dev python3-dev linux-headers \
 gfortran perl libgcc libquadmath musl libgfortran lapack-dev \
-gcc py-pip freetype-dev libpng-dev openblas-dev 
+gcc py-pip freetype-dev libpng-dev openblas-dev libstdc++ zlib
 
 RUN pip install -U pip setuptools
 
@@ -49,7 +49,17 @@ RUN pip install TA-lib
 #build-base postgresql-dev libffi-dev linux-headers \
 #gfortran perl libgcc libquadmath musl libgfortran lapack-dev \
 #gcc py-pip freetype-dev libpng-dev openblas-dev 
-RUN pip install eventlet
+
+RUN apk add --no-cache \
+            --allow-untrusted \
+            --repository \
+             http://dl-3.alpinelinux.org/alpine/edge/testing \
+            hdf5 \
+            hdf5-dev && \
+    apk add --no-cache \
+        build-base
+RUN pip install --no-cache-dir --no-binary :all: tables h5py
+RUN apk --no-cache del build-base
 
 WORKDIR /code
 # Expose port 5000 for gunicorn and 8888 for Jupyter

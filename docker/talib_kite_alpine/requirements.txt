@@ -18,3 +18,4 @@ redistimeseries
 redisearch
 redisgraph
 flask-socketio
+eventlet
