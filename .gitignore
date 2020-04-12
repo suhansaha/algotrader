@@ -2,3 +2,4 @@ src/__pycache__/*
 src/.ipynb_checkpoints/*
 .vscode/*
 src/data/*.h5
+src/lib/__pycache__/*

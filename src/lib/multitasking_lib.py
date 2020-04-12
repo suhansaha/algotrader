@@ -88,6 +88,7 @@ class threadManager():
         #pinfo("Exiting Main Thread")
         
     def add(self, name, callback, pubsub=True, q="default"):
+        # Create an instance of mythrade class and start the thread
         thread = myThread(self, name, callback, pubsub, q)
         thread.start()
         self.threads.append(thread)
@@ -174,17 +175,40 @@ def order_handler(manager, data):
 '''
 import json
 import ast
+from datetime import datetime, timedelta
+import time
 
 def backtest_handler(manager, data):
-    #pdebug('order_handler: {}'.format(data))
-    stock = pd.read_json(data)['stock']
-    stock_data = pd.DataFrame(ast.literal_eval(json.loads(data)[0]['data']))
-    algo = pd.read_json(data)['algo'].values[0]
-    
-    OPEN = stock_data['open']
-    CLOSE = stock_data['close']
-    HIGH = stock_data['high']
-    LOW = stock_data['low']
-    
-    #pdebug(stock_data.head())
+    pdebug('order_handler: {}'.format(data))
+
+    try:
+        json_data = json.loads(data)
+    except:
+        pdebug("input data is not json")
+        return
+    stock = json_data['stock']
+    toDate = json_data['toDate']
+    fromDate = json_data['fromDate']
+    algo = json_data['algo']
+
+    temp_file = pd.HDFStore("data/kite_cache_day.h5", mode="r")
+    tmpdata = temp_file.get('/day/NSE/'+stock)
+
+    per1 = pd.date_range(start =fromDate, end =toDate, freq ='1D') 
+    startDate = datetime.strptime(fromDate,'%Y-%m-%d') - timedelta(days=30)
+
+    for val in per1:
+        data = tmpdata[(tmpdata.index >= startDate) & (tmpdata.index <= val)]
+        conn.set(stock, data.to_json(orient='columns'))
+        time.sleep(0.3)
+        #pdebug(val)
+
+    conn.set('done',1)
     exec(algo)
+    #OPEN = stock_data['open']
+    #CLOSE = stock_data['close']
+    #HIGH = stock_data['high']
+    #LOW = stock_data['low']
+    
+
+################## Freedom App #######################

@@ -44,10 +44,14 @@ dash_app.layout = html.Div(className='container', children=[
         marks={str(year): str(year) for year in df['year'].unique()},
         step=None
     ),
+        html.Button(n_clicks=0, children='Start', id='btnStart'),
+        html.Button(n_clicks=0, children='Stop', id='btnStop'),
         dcc.Graph(id='live-graph', animate=True),
         dcc.Interval(
             id='graph-update',
-            interval=5*1000
+            interval=5*1000,
+            n_intervals=0,
+            max_intervals=-1
         ),
     ]
 
@@ -98,7 +102,7 @@ def update_figure(selected_year):
     }
 
 
-
+from lib.logging_lib import *
 @dash_app.callback(Output('live-graph', 'figure'),
               [Input('graph-update','n_intervals')])
 def update_graph_scatter(input_data):
@@ -111,7 +115,19 @@ def update_graph_scatter(input_data):
             name='Scatter',
             mode= 'lines+markers'
             )
+    pdebug(input_data)
+    #graph-update.max_intervals = -1
 
-    return {'data': [data],'layout' : go.Layout(xaxis=dict(range=[min(X),max(X)]),
+    fig = {'data': [data],'layout' : go.Layout(xaxis=dict(range=[min(X),max(X)]),
                                                 yaxis=dict(range=[min(Y),max(Y)]),)}
+    
+    return fig
 
+
+@dash_app.callback(Output('graph-update', 'max_intervals'),
+              [Input('btnStop', 'n_clicks')])
+def stop_timer(id1):
+    pdebug(id1)
+    if id1 % 2 == 0:
+        return -1
+    return 0

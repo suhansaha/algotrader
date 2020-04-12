@@ -14,33 +14,74 @@ dash_app = dash.Dash(__name__, server=app, external_stylesheets=external_stylesh
 dash_app.layout = layout_backtest
 
 
+cache.set('done',1)
 import pandas as pd
 import json
-
-
-
 @dash_app.callback(
-    [Output('example-graph', 'figure'),
-    Output('msg', 'children')],
+    Output('graph-update', 'n_intervals'),
     [Input('button', 'n_clicks')],
     [State('yaxis-column','value'), State('input-box', 'value'), 
     State('date-picker-range', 'start_date'), State('date-picker-range', 'end_date'),
     State('algo','value')])
-def update_output(n_clicks, stock, value, start_date, end_date, algo ):
-    tmpdata = temp_file.get('/day/NSE/'+stock)
+def start_backtest(n_clicks, stock, value, start_date, end_date, algo ):
+    pdebug(n_clicks)
+    #tmpdata = temp_file.get('/day/NSE/'+stock)
     toDate = end_date
     fromDate = start_date
-    data = tmpdata[(tmpdata.index >= fromDate) & (tmpdata.index <= toDate)]
+    #data = tmpdata[(tmpdata.index >= fromDate) & (tmpdata.index <= toDate)]
 
-
-    json_raw_data={
+    # Step 1: Create the msg for initiating backtest
+    backtest_msg={
         'stock':stock,
-        'data':data.to_json(orient='records'),
-        'algo':algo
+        #'data':data.to_json(orient='records'),
+        'algo':algo,
+        'fromDate':fromDate,
+        'toDate':toDate
     }
 
-    json_df = pd.DataFrame(data=json_raw_data, index=['stock'])
-    json_data = json_df.to_json(orient='records')
-    cache.publish('backtest/data',json_data)
-    #exec(algo)
-    return render_charts(data, stock), cache.get('temp')
+    # Step 2: Store the stock name under backtest in the redis cache
+    cache.set('stock',stock)
+
+    # Step 3 : Store the OHLC and backtest data in the redis: to be used by plotter
+    ohlc_dict = '[{"date":'+json.dumps(fromDate)+',"close":0,"high":0,"low":0,"open":0,"volume":0}]'
+    cache.set(stock,ohlc_dict)
+
+    # Step 4: Done is set to 0: Backtest is in progress, will be resetted by backtest job
+    cache.set('done',0)
+    # Step 5: Send the msg to backtest thread to initiate the back test
+    cache.publish('backtest/data',json.dumps(backtest_msg))
+
+    # Step 9: Return 0 to reset n_intervals count
+    return 0 
+
+@dash_app.callback(
+    [Output('graph-update', 'disabled'),Output('button', 'disabled'),Output('button', 'children')],
+    [Input('graph-update', 'n_intervals'), 
+     Input('button', 'n_clicks')])
+def update_intervals(n_intervals, clicks):
+    pdebug("Update Intervals: {}: {}".format(n_intervals, cache.get('done')))
+
+    # if done is set to 1 then backtest is complete -> Time to disable interval and enable backtest button
+    if cache.get('done') == "1": # Backtest complete
+        pdebug("Returning True: Disable Interval")
+        return True, False, 'BACKTEST: Start' 
+    else: # Backtest is in progress
+        pdebug("Returning False: Enable Interval")
+        return False, True, 'BACKTEST: In Progress'
+
+
+@dash_app.callback(
+    [Output('example-graph', 'figure'),
+     Output('msg', 'children')],
+    [Input('graph-update', 'n_intervals')])
+def update_output(n_intervals ):
+    stock = cache.get('stock')
+    #pdebug("In update output: {}".format(stock))
+    ohlc_df = pd.read_json(cache.get(stock))
+
+    ohlc_df.index.rename('date', inplace=True)
+    #pdebug(ohlc_df.head())
+    cache.set('logMsg',"{} :{}\n".format(stock, n_intervals))
+    logMsg = cache.get('logMsg')
+
+    return render_charts(ohlc_df, stock), logMsg
