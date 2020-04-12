@@ -1,0 +1,610 @@
+import datetime
+## Authentication Response: /session/token
+auth_resp_msg = {
+  "status": "success",
+  "data": {
+    "user_id": "XX000",
+    "user_name": "Kite Connect",
+    "user_shortname": "Kite",
+    "email": "kite@kite.trade",
+    "user_type": "investor",
+    "broker": "ZERODHA",
+    "exchanges": [
+      "MCX",
+      "BSE",
+      "NSE",
+      "BFO",
+      "NFO",
+      "CDS"
+    ],
+    "products": [
+      "BO",
+      "CNC",
+      "CO",
+      "MIS",
+      "NRML"
+    ],
+    "order_types": [
+      "LIMIT",
+      "MARKET",
+      "SL",
+      "SL-M"
+    ],
+    "api_key": "xxxxxx",
+    "access_token": "yyyyyy",
+    "public_token": "zzzzzz",
+    "refresh_token": null,
+    "login_time": "2018-01-01 16:15:14",
+    "avatar_url": null
+  }
+}
+
+# User Profile: /user/profile
+profile_resp_msg = {
+  "status": "success",
+  "data": {
+    "user_type": "investor",
+    "email": "kite@kite.trade",
+    "user_name": "Kite Connect",
+    "user_shortname": "Kite",
+    "broker": "ZERODHA",
+    "exchanges": [
+      "MCX",
+      "BSE",
+      "NSE",
+      "BFO",
+      "NFO",
+      "CDS"
+    ],
+    "products": [
+      "BO",
+      "CNC",
+      "CO",
+      "MIS",
+      "NRML"
+    ],
+    "order_types": [
+      "LIMIT",
+      "MARKET",
+      "SL",
+      "SL-M"
+    ]
+  }
+}
+
+# Funds and margins: /user/margins, /user/margins/:segment
+margins_resp_msg = {
+  "status": "success",
+  "data": {
+    "equity": {
+      "enabled": true,
+      "net": 24966.7493,
+      "available": {
+        "adhoc_margin": 0,
+        "cash": 25000,
+        "collateral": 0,
+        "intraday_payin": 0
+      },
+      "utilised": {
+        "debits": 33.2507,
+        "exposure": 0,
+        "m2m_realised": -0.25,
+        "m2m_unrealised": 0,
+        "option_premium": 0,
+        "payout": 0,
+        "span": 0,
+        "holding_sales": 0,
+        "turnover": 0
+      }
+    },
+    "commodity": {
+      "enabled": true,
+      "net": 25000,
+      "available": {
+        "adhoc_margin": 0,
+        "cash": 25000,
+        "collateral": 0,
+        "intraday_payin": 0
+      },
+      "utilised": {
+        "debits": 0,
+        "exposure": 0,
+        "m2m_realised": 0,
+        "m2m_unrealised": 0,
+        "option_premium": 0,
+        "payout": 0,
+        "span": 0,
+        "holding_sales": 0,
+        "turnover": 0
+      }
+    }
+  }
+}
+
+# Market quote: Full
+quote_full_msg = {
+  "status":"success",
+  "data":{
+    "NSE:INFY":{
+      "instrument_token":408065,
+      "timestamp":"2019-12-09 17:36:07",
+      "last_trade_time":"2019-12-09 15:57:46",
+      "last_price":717.25,
+      "last_quantity":20,
+      "buy_quantity":0,
+      "sell_quantity":1915,
+      "volume":6435865,
+      "average_price":718.65,
+      "oi":0,
+      "oi_day_high":0,
+      "oi_day_low":0,
+      "net_change":0,
+      "lower_circuit_limit":645.55,
+      "upper_circuit_limit":788.95,
+      "ohlc":{
+        "open":716,
+        "high":722.35,
+        "low":714.25,
+        "close":715.1
+      },
+      "depth":{
+        "buy":[
+          {
+            "price":0,
+            "quantity":0,
+            "orders":0
+          },
+          {
+            "price":0,
+            "quantity":0,
+            "orders":0
+          },
+          {
+            "price":0,
+            "quantity":0,
+            "orders":0
+          },
+          {
+            "price":0,
+            "quantity":0,
+            "orders":0
+          },
+          {
+            "price":0,
+            "quantity":0,
+            "orders":0
+          }
+        ],
+        "sell":[
+          {
+            "price":717.25,
+            "quantity":1915,
+            "orders":26
+          },
+          {
+            "price":0,
+            "quantity":0,
+            "orders":0
+          },
+          {
+            "price":0,
+            "quantity":0,
+            "orders":0
+          },
+          {
+            "price":0,
+            "quantity":0,
+            "orders":0
+          },
+          {
+            "price":0,
+            "quantity":0,
+            "orders":0
+          }
+        ]
+      }
+    }
+  }
+}
+
+# Market Quote: OHLC
+quote_ohlc_msg = {
+    "status": "success",
+    "data": {
+        "BSE:SENSEX": {
+            "instrument_token": 265,
+            "last_price": 31606.48,
+            "ohlc": {
+                "open": 31713.5,
+                "high": 31713.5,
+                "low": 31586.53,
+                "close": 31809.55
+            }
+        },
+        "NSE:INFY": {
+            "instrument_token": 408065,
+            "last_price": 890.9,
+            "ohlc": {
+                "open": 900,
+                "high": 900.3,
+                "low": 890,
+                "close": 901.9
+            }
+        },
+        "NSE:NIFTY 50": {
+            "instrument_token": 256265,
+            "last_price": 9893.4,
+            "ohlc": {
+                "open": 9899.25,
+                "high": 9911.9,
+                "low": 9882.55,
+                "close": 9952.2
+            }
+        }
+    }
+}
+
+# Market Quote: LTP
+quote_ltp_msg = {
+    "status": "success",
+    "data": {
+        "BSE:SENSEX": {
+            "instrument_token": 265,
+            "last_price": 31606.48
+        },
+        "NSE:INFY": {
+            "instrument_token": 408065,
+            "last_price": 890.9
+        },
+        "NSE:NIFTY 50": {
+            "instrument_token": 256265,
+            "last_price": 9893.4
+        }
+    }
+}
+
+
+
+
+# Websocket: Postbacks: payload in the data: type_> order/error/message
+'''
+{
+    "type": "order",
+    "data": {}
+}
+
+# Postback payload: status:=> open, complete, cancelled, rejected
+    "order_id": "16032300017157",
+    "exchange_order_id": "511220371736111",
+    "placed_by": "AB0012",
+    "status": "COMPLETE",
+    "status_message": "",
+
+    "tradingsymbol": "TATAMOTORS",
+    "exchange": "NSE",
+    "order_type": "MARKET",
+    "transaction_type": "SELL",
+    "validity": "DAY",
+    "product": "CNC",
+
+    "average_price": 376.35,
+    "price": 376.35,
+    "quantity": 1,
+    "filled_quantity": 1,
+    "unfilled_quantity": 0,
+    "trigger_price": 0,
+    "status_message": "",
+    "user_id": "AB0012",
+    "order_timestamp": "2015-12-20 15:01:43",
+    "exchange_timestamp": "2015-12-20 15:01:43",
+    "checksum": "5aa3f8e3c8cc41cff362de9f73212e28"
+}
+'''
+
+#Open Orders
+order_notification_msg = {
+  "status": "success",
+  "data": [{
+    "order_id": "151220000000000",
+    "parent_order_id": "151210000000000",
+    "exchange_order_id": null,
+    "placed_by": "AB0012",
+    "variety": "regular",
+    "status": "REJECTED",
+
+    "tradingsymbol": "ACC",
+    "exchange": "NSE",
+    "instrument_token": 22,
+    "transaction_type": "BUY",
+    "order_type": "MARKET",
+    "product": "NRML",
+    "validity": "DAY",
+
+    "price": 0.0,
+    "quantity": 75,
+    "trigger_price": 0.0,
+
+    "average_price": 0.0,
+    "pending_quantity": 0,
+    "filled_quantity": 0,
+    "disclosed_quantity": 0,
+    "market_protection": 0,
+
+    "order_timestamp": "2015-12-20 15:01:43",
+    "exchange_timestamp": null,
+
+    "status_message": "RMS:Margin Exceeds, Required:0, Available:0",
+    "tag": null,
+    "meta": {}
+  }]
+}
+
+
+order_notifications_msg = {
+  "status": "success",
+  "data": [
+    {
+      "average_price": 0,
+      "cancelled_quantity": 0,
+      "disclosed_quantity": 0,
+      "exchange": "NSE",
+      "exchange_order_id": null,
+      "exchange_timestamp": null,
+      "exchange_update_timestamp": null,
+      "filled_quantity": 0,
+      "instrument_token": 1,
+      "market_protection": 0,
+      "order_id": "171222000539943",
+      "order_timestamp": "2017-12-22 10:36:09",
+      "order_type": "SL",
+      "parent_order_id": null,
+      "pending_quantity": 1,
+      "placed_by": "ZQXXXX",
+      "price": 130,
+      "product": "MIS",
+      "quantity": 1,
+      "status": "PUT ORDER REQ RECEIVED",
+      "status_message": null,
+      "tag": null,
+      "tradingsymbol": "ASHOKLEY",
+      "transaction_type": "BUY",
+      "trigger_price": 128,
+      "validity": "DAY",
+      "variety": "regular"
+    },
+    {
+      "average_price": 0,
+      "cancelled_quantity": 0,
+      "disclosed_quantity": 0,
+      "exchange": "NSE",
+      "exchange_order_id": null,
+      "exchange_timestamp": null,
+      "filled_quantity": 0,
+      "instrument_token": 54273,
+      "market_protection": 0,
+      "order_id": "171222000539943",
+      "order_timestamp": "2017-12-22 10:36:09",
+      "order_type": "SL",
+      "parent_order_id": null,
+      "pending_quantity": 1,
+      "placed_by": "ZQXXXX",
+      "price": 130,
+      "product": "MIS",
+      "quantity": 1,
+      "status": "VALIDATION PENDING",
+      "status_message": null,
+      "tag": null,
+      "tradingsymbol": "ASHOKLEY",
+      "transaction_type": "BUY",
+      "trigger_price": 128,
+      "validity": "DAY",
+      "variety": "regular"
+    },
+    {
+      "average_price": 0,
+      "cancelled_quantity": 0,
+      "disclosed_quantity": 0,
+      "exchange": "NSE",
+      "exchange_order_id": null,
+      "exchange_timestamp": null,
+      "filled_quantity": 0,
+      "instrument_token": 54273,
+      "market_protection": 0,
+      "order_id": "171222000539943",
+      "order_timestamp": "2017-12-22 10:36:09",
+      "order_type": "SL",
+      "parent_order_id": null,
+      "pending_quantity": 0,
+      "placed_by": "ZQXXXX",
+      "price": 130,
+      "product": "MIS",
+      "quantity": 1,
+      "status": "REJECTED",
+      "status_message": "RMS:Rule: Check circuit limit including square off order exceeds  for entity account-DH0490 across exchange across segment across product ",
+      "tag": null,
+      "tradingsymbol": "ASHOKLEY",
+      "transaction_type": "BUY",
+      "trigger_price": 128,
+      "validity": "DAY",
+      "variety": "regular"
+    }
+  ]
+}
+
+
+order_book_resp_msg = {
+    "status": "success",
+    "data": [{
+        "trade_id": "159918",
+        "order_id": "151220000000000",
+        "exchange_order_id": "511220371736111",
+
+        "tradingsymbol": "ACC",
+        "exchange": "NSE",
+        "instrument_token": "22",
+
+        "transaction_type": "BUY",
+        "product": "MIS",
+        "average_price": 100.98,
+        "quantity": 10,
+
+        "fill_timestamp": "2015-12-20 15:01:44",
+        "exchange_timestamp": "2015-12-20 15:01:43"
+
+    }]
+}
+
+trade_book_resp_msg = {
+    "status": "success",
+    "data": [{
+        "trade_id": "159918",
+        "order_id": "151220000000000",
+        "exchange_order_id": "511220371736111",
+
+        "tradingsymbol": "ACC",
+        "exchange": "NSE",
+        "instrument_token": "22",
+
+        "transaction_type": "BUY",
+        "product": "MIS",
+        "average_price": 100.98,
+        "quantity": 10,
+
+        "fill_timestamp": "2015-12-20 15:01:44",
+        "exchange_timestamp": "2015-12-20 15:01:43"
+
+    }]
+}
+full_quote_msg = [{
+    'instrument_token': 53490439,
+    'mode': 'full',
+    'volume': 12510,
+    'last_price': 4084.0,
+    'average_price': 4086.55,
+    'last_quantity': 1,
+    'buy_quantity': 2356,
+    'sell_quantity': 2440,
+    'change': 0.46740467404674046,
+    'last_trade_time': datetime.datetime(2018, 1, 15, 13, 16, 54),
+    'timestamp': datetime.datetime(2018, 1, 15, 13, 16, 56),
+    'oi': 21845,
+    'oi_day_low': 0,
+    'oi_day_high': 0,
+    'ohlc': {
+        'high': 4093.0,
+        'close': 4065.0,
+        'open': 4088.0,
+        'low': 4080.0
+    },
+    'tradable': True,
+    'depth': {
+        'sell': [{
+            'price': 4085.0,
+            'orders': 1048576,
+            'quantity': 43
+        }, {
+            'price': 4086.0,
+            'orders': 2752512,
+            'quantity': 134
+        }, {
+            'price': 4087.0,
+            'orders': 1703936,
+            'quantity': 133
+        }, {
+            'price': 4088.0,
+            'orders': 1376256,
+            'quantity': 70
+        }, {
+            'price': 4089.0,
+            'orders': 1048576,
+            'quantity': 46
+        }],
+        'buy': [{
+            'price': 4084.0,
+            'orders': 589824,
+            'quantity': 53
+        }, {
+            'price': 4083.0,
+            'orders': 1245184,
+            'quantity': 145
+        }, {
+            'price': 4082.0,
+            'orders': 1114112,
+            'quantity': 63
+        }, {
+            'price': 4081.0,
+            'orders': 1835008,
+            'quantity': 69
+        }, {
+            'price': 4080.0,
+            'orders': 2752512,
+            'quantity': 89
+        }]
+    }
+},{
+    'instrument_token': 53490439,
+    'mode': 'full',
+    'volume': 12510,
+    'last_price': 4084.0,
+    'average_price': 4086.55,
+    'last_quantity': 1,
+    'buy_quantity': 2356,
+    'sell_quantity': 2440,
+    'change': 0.46740467404674046,
+    'last_trade_time': datetime.datetime(2018, 1, 15, 13, 16, 54),
+    'timestamp': datetime.datetime(2018, 1, 15, 13, 16, 56),
+    'oi': 21845,
+    'oi_day_low': 0,
+    'oi_day_high': 0,
+    'ohlc': {
+        'high': 4093.0,
+        'close': 4065.0,
+        'open': 4088.0,
+        'low': 4080.0
+    },
+    'tradable': True,
+    'depth': {
+        'sell': [{
+            'price': 4085.0,
+            'orders': 1048576,
+            'quantity': 43
+        }, {
+            'price': 4086.0,
+            'orders': 2752512,
+            'quantity': 134
+        }, {
+            'price': 4087.0,
+            'orders': 1703936,
+            'quantity': 133
+        }, {
+            'price': 4088.0,
+            'orders': 1376256,
+            'quantity': 70
+        }, {
+            'price': 4089.0,
+            'orders': 1048576,
+            'quantity': 46
+        }],
+        'buy': [{
+            'price': 4084.0,
+            'orders': 589824,
+            'quantity': 53
+        }, {
+            'price': 4083.0,
+            'orders': 1245184,
+            'quantity': 145
+        }, {
+            'price': 4082.0,
+            'orders': 1114112,
+            'quantity': 63
+        }, {
+            'price': 4081.0,
+            'orders': 1835008,
+            'quantity': 69
+        }, {
+            'price': 4080.0,
+            'orders': 2752512,
+            'quantity': 89
+        }]
+    }
+}]
