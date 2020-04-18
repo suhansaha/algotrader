@@ -18,51 +18,50 @@ from queue import Queue
 from redis import Redis
 import multiprocessing
 
+from lib.kite_helper_lib import *
+
 exitFlag = 0
 
 conn = Redis(host='redis', port=6379, db=0, charset="utf-8", decode_responses=True)
 
 # The base thread class to enable multithreading
 class myThread (threading.Thread):
-    def __init__(self, manager, name, callback, pubsub=True, q="default"):
+    def __init__(self, manager, name, callback, pubsub=True, msg=""):
         threading.Thread.__init__(self)
         self.threadID = manager.threadID
         self.name = name
         self.callback = callback
         self.pubsub = pubsub
-        self.queue = q
         self.manager = manager
+        self.msg = msg
         
     def run(self):
         pdebug("Starting " + self.name)
         if self.pubsub:
-            self.thread_function(self.callback)
+            self.thread_pubsub(self.callback)
         else:
-            self.thread_job(self.callback, self.queue)
+            self.thread_worker(self.callback)
         pdebug("Exiting " + self.name)
     
     # The thread function for infinite threads which can expect IPC using Redis
-    def thread_function(self, callback):
+    def thread_pubsub(self, callback):
         pubsub = conn.pubsub()
-        pubsub.subscribe([self.name+'/cmd', self.name+'/data'])
+        pubsub.subscribe([self.name])
         
-        pubsub.get_message(self.name+'/cmd')
-        pubsub.get_message(self.name+'/data')
+        pubsub.get_message(self.name)
 
         for item in pubsub.listen():
-            channel = item['channel'].split('/')[1]
-            data = item['data']
-            pdebug(self.name+':'+channel)
-            if channel== 'data':
-                callback(self.manager, data)
-            elif channel== 'cmd' and data == 'stop':
+            msg = item['data']
+            if msg == 'stop':
                 pubsub.unsubscribe()
                 break
+            else:
+                callback(self.manager, msg)
     
     #The thread function for one of tasks
-    def thread_job(self, callback, queue):
+    def thread_worker(self, callback):
         #pdebug(conn.rpop(queue))
-        callback(queue)
+        callback(self.msg)
 
 jobs = []
 class threadManager():
@@ -87,79 +86,12 @@ class threadManager():
         #    t.join()
         #pinfo("Exiting Main Thread")
         
-    def add(self, name, callback, pubsub=True, q="default"):
+    def add(self, name, callback, pubsub=True, cmd=""):
         # Create an instance of mythrade class and start the thread
-        thread = myThread(self, name, callback, pubsub, q)
+        thread = myThread(self, name, callback, pubsub, cmd)
         thread.start()
         self.threads.append(thread)
         self.threadID += 1
-
-def hello_world1(manager, data):
-    pdebug("1: "+ str(data))
-    
-def hello_world2(manager, data):
-    pdebug("2: "+ str(data))
-
-
-###################### Ordering ######################
-'''
-# order/data
-{
-'stock':'NIFTY',
-'qty':'12',
-'type':'BO',
-'SL':'1234',
-'Target':'1234',
-'Price':'1234'
-}
-
-
-'''
-import pandas as pd
-import json
-
-def order_job(queue):
-    data = conn.rpop(queue)
-    order_df = pd.read_json(data)
-    
-    stock = order_df['stock'][0]
-    state=stock+'_state'
-    
-    pdebug('order_job: start: {}\n{}'.format(stock, order_df))
-    
-    pubsub = conn.pubsub()
-    pubsub.subscribe([stock+'/cmd'])
-    
-    for item in pubsub.listen():
-        data = item['data']
-        pdebug('order_job: running: {}'.format(stock))
-        conn.set(state, 'running')
-        
-        if data == "abort":
-            conn.delete(state)
-            pubsub.unsubscribe()
-            break
-        elif data == "info":
-            pinfo("{} : {}\n {}\n".format(stock, conn.get(state), order_df))
-    conn.delete(state)
-            
-
-
-#order_queue_lock = r.lock('order_queue_lock')
-orderManager = ""
-def order_handler(manager, data):
-    pdebug('order_handler: {}'.format(data))
-    stock = pd.read_json(data)['stock']
-    state = stock[0]+'_state'
-    if conn.get(state) == None:
-        #Kex does not exist
-        conn.lpush('order_queue', data)
-        conn.set(state,'init')
-        manager.add("order_job_"+stock[0],order_job, False, 'order_queue')
-    else:
-        for t in manager.threads:
-            print(t.name)
-        pinfo('order_handler: Trade in progress: publish command to {}/cmd'.format(pd.read_json(data)['stock'][0]))
 
 
 ###################### BackTest ######################
@@ -212,3 +144,141 @@ def backtest_handler(manager, data):
     
 
 ################## Freedom App #######################
+
+# This function is called by Kite or Kite_Simulation
+def notification_despatcher(ws, msg, Tick=True ):
+    pdebug('notification_despatcher: {}'.format(msg))
+    # Step 1: Extract msg type: Tick/Callbacks
+    
+    # Step 2.1: If Tick
+    if Tick == True:
+        # Push msg to msgBufferQueue
+        #pdebug(msg)
+        msg_id = conn.xadd('msgBufferQueue',{'msg': msg})
+        pdebug("Despatcher: {}".format(msg_id))
+    
+    # Step 2.2: else
+    else:
+        # Push msg to notificationQueue
+        conn.xadd('notificationQueue',{'msg': msg})
+        
+def order_handler(manager, msg):
+    pdebug('order_handler: {}'.format(msg))
+    
+    # Step 1: Block for new order request: OrderQueue
+    
+    # Step 2: Create order msg for Kite: fill metadata
+    
+    # Step 3: If papertrade: create a log entry
+    
+    # Step 4: If not a papertrade: despatch order
+        
+def kite_simulator(manager, msg):
+    pdebug('kite_simulator: {}'.format(msg))
+    
+    try:
+        data = json.loads(msg)
+    except:
+        return
+    #pdebug(data)
+    
+    # Load data from the Cache
+    ohlc_data = getData(data['stock'], data['fromDate'], data['toDate'], data['exchange'], data['freq']
+                       , False, data['stock'])
+    
+    # Initialize state
+    hash_key = data['stock']+'_state'
+    conn.hmset(hash_key, {'state':'INIT','stock':data['stock'], 'qty':0,'price':0,'algo':'','freq':data['freq'],'so':0,'target':0})
+    
+    
+    #pdebug(ohlc_data.head())
+    # Loop through OHLC data from local storage
+    for index, row in ohlc_data.iterrows(): 
+        # Check square off conditions
+    
+        # Construct Json message like Kite
+        mydate = "{}-{}-{}".format(index.year,index.month,index.day)
+        
+        '''
+        "NSE:INFY": {
+            "instrument_token": 408065,
+            "last_price": 890.9,
+            "ohlc": {
+                "open": 900,
+                "high": 900.3,
+                "low": 890,
+                "close": 901.9
+            }
+        }'''
+        
+        msg = {data['exchange']+":"+data['stock']:{"ohlc":{'date':mydate,'open':row['open'],'high':row['high'],'low':row['low'],'close':row['close'],'volume':row['volume']}}}
+        #pdebug(msg)
+        msg = json.dumps(msg)
+        
+        # Call notification_despatcher
+        notification_despatcher(None, msg)
+        # Optional: wait few miliseconds
+        #time.sleep(0.01)    
+
+    
+def user_requests_handler(manager, msg): 
+    # {'request':'start|stop|pause|buy|sell|so|status','stock':'TCS', 'qty':10, 'price':1200}
+    pdebug('user_requests_handler: {}'.format(msg))
+    # Step 1: Blocking call to userRequestsQueue
+    msg = conn.xread({'userRequestsQueue':'$'}, block=0, count=100)
+    
+    # Step 2: Process userRequest: Start a worker thread for each request
+    
+    # 2.1: Start Algo Trade: Stock
+    # 2.2: Stop Algo Trade: Stock
+    # 2.3: Pause Algo Trade: Stock
+    # 2.4: Force Buy: Stock
+    # 2.5: Force Sell: Stock
+    # 2.6: Square Off
+    # 2.7: Current Status
+    
+    # Step 3: Put it in the userRequestsQueue
+   
+    
+
+    
+def backtest_handler_v2(manager, msg):
+    pdebug('backtest_handler: {}'.format(msg))
+    # Start an interval thread: 1000 ms
+    
+    # Calculate trade status data, charts and analytics
+    
+    # Update redis cache with figure and msg
+    
+    
+# This function implements logic to resume trading post abrupt termination
+def auto_resume_trade(msg):
+    pdebug('resume_trade: {}'.format(msg))
+    
+    # 1: Get list of open orders from Kite
+    
+    # 2: Loop through all the open trades in the system
+    
+    # 3: If an open trade in the system is not present in Kite, reset status to init
+    
+    # 4: For open trades fill OHLC buffer with historical data
+    
+def freedom_init(manager, msg):
+    pdebug('freedom_init: {}'.format(msg))
+    # 0: Initialize settings
+    
+    # 1: Start Freedom threads and processes
+    freedom = threadManager("freedom", ["user_requests_handler", "kite_simulator", "backtest_handler", "trade_handler","order_handler"], 
+                        [user_requests_handler, kite_simulator, backtest_handler, trade_handler, order_handler])
+    
+    # 2: Start kite websocket connections
+    # Initialise
+    #kws = KiteTicker(KiteAPIKey, kite.access_token)
+
+    # Assign the callbacks.
+    #kws.on_ticks = on_ticks
+    #kws.on_connect = on_connect
+    #kws.on_order_update = on_order_update
+    
+#TODO: Watchdog implementation to resume processes
+#TODO: Implementation of user initiated aborts and restart
