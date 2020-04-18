@@ -1,24 +1,12 @@
-
-#setup logging
-import logging
-logging.basicConfig(format='%(asctime)s:%(levelname)s:\t%(message)s', level=logging.DEBUG, datefmt='%m-%d %H:%M:%S')
-logger = logging.getLogger('simple_example')
-#logger.setLevel(logging.DEBUG)
-
-pdebug = lambda x: logger.debug(x)
-pinfo = lambda x: logger.info(x)
-perror = lambda x: logger.error(x)
-pexception = lambda x: logger.critical(x)
-
-
-
 import threading
 import time
 from queue import Queue
 from redis import Redis
 import multiprocessing
 
+from lib.logging_lib import *
 from lib.kite_helper_lib import *
+
 
 exitFlag = 0
 
