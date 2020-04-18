@@ -144,6 +144,22 @@ def backtest_handler(manager, data):
     
 
 ################## Freedom App #######################
+no_of_hist_candles = 100
+
+def msg_to_ohlc(data):
+    ohlc_list = list(data.values())[0]['ohlc']
+    sdate = ohlc_list['date']
+    shigh = ohlc_list['high']
+    slow = ohlc_list['low']
+    sopen = ohlc_list['open']
+    sclose = ohlc_list['close']
+    svolume = ohlc_list['volume']
+
+    temp_df = pd.DataFrame(ohlc_list, columns=['open','high','low','close','volume'], 
+                           index=[datetime.strptime(ohlc_list['date'],'%Y-%m-%d')])
+    
+    return temp_df
+
 
 # This function is called by Kite or Kite_Simulation
 def notification_despatcher(ws, msg, Tick=True ):
@@ -188,7 +204,14 @@ def kite_simulator(manager, msg):
     
     # Initialize state
     hash_key = data['stock']+'_state'
-    conn.hmset(hash_key, {'state':'INIT','stock':data['stock'], 'qty':0,'price':0,'algo':'','freq':data['freq'],'so':0,'target':0})
+    
+    try:
+        all_keys = list(conn.hgetall(hash_key).keys())
+        conn.hdel(hash_key,*all_keys)
+    except:
+        pass
+    
+    conn.hmset(hash_key, {'state':'INIT','stock':data['stock'], 'qty':0,'price':0,'algo':'','freq':data['freq'],'so':0,'target':0,'last_processed':'1999-01-01'})
     
     
     #pdebug(ohlc_data.head())
@@ -218,7 +241,7 @@ def kite_simulator(manager, msg):
         # Call notification_despatcher
         notification_despatcher(None, msg)
         # Optional: wait few miliseconds
-        #time.sleep(0.01)    
+        time.sleep(0.01)    
 
     
 def user_requests_handler(manager, msg): 
