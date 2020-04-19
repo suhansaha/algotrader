@@ -48,6 +48,13 @@ def start_backtest(n_clicks, stock, value, start_date, end_date, algo ):
     cache.set('done',0)
     # Step 5: Send the msg to backtest thread to initiate the back test
     cache.publish('backtest',json.dumps(backtest_msg))
+    
+    # Start Kite Simulator
+    exchange = 'NSE'
+    freq = 'day'
+    msg = json.dumps({'stock': stock, 'fromDate':fromDate,'toDate':toDate, 'exchange':exchange, 'freq':freq})
+    cache.publish('trade_handler','start')
+    cache.publish('kite_simulator',msg)
 
     # Step 9: Return 0 to reset n_intervals count
     return 0 

@@ -115,12 +115,12 @@ def backtest_handler(manager, data):
     fromDate = json_data['fromDate']
     algo = json_data['algo']
 
-    # TODO: Replace with getData
-    temp_file = pd.HDFStore("data/kite_cache_day.h5", mode="r")
-    tmpdata = temp_file.get('/day/NSE/'+stock)
-
     per1 = pd.date_range(start =fromDate, end =toDate, freq ='1D') 
     startDate = datetime.strptime(fromDate,'%Y-%m-%d') - timedelta(days=30)
+
+    startDatestr = startDate.strftime('%Y-%m-%d')
+
+    tmpdata = getData(stock, startDatestr, toDate, 'NSE', 'day', False, stock) #TODO: remove hard-coding
 
     for val in per1:
         data = tmpdata[(tmpdata.index >= startDate) & (tmpdata.index <= val)]
@@ -188,6 +188,7 @@ def kite_simulator(manager, msg):
     try:
         data = json.loads(msg)
     except:
+        perror('kite_simulator: Invalid msg: {}'.format(msg))
         return
     #pdebug(data)
     
