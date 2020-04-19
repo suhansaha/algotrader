@@ -26,7 +26,7 @@ layout_backtest = html.Div(children=[
 
             # Group 2
             html.Label("Algo:"),
-            dcc.Textarea(value='Algo:Suhan',style={'width': '100%', 'height':'200px'}, id='algo', rows=30, wrap='soft'),
+            dcc.Textarea(value='',style={'width': '100%', 'height':'200px'}, id='algo', rows=30, wrap='soft'),
             html.Br(),
             # Group 3
             html.Label("Date:", className='columns one'),
@@ -37,10 +37,9 @@ layout_backtest = html.Div(children=[
             dcc.Input(id='input-box', type='text', className='columns two'),
             html.Br(), html.Br(), 
             html.Button('BackTest: Start', id='button', disabled=True, className='columns five'),
-            html.Br(),html.Hr(), 
+            html.Br(),html.Br(),
             # Group 4
-            html.Label("Log:"),html.Br(),
-            html.Div( id='msg', children='')
+            html.Div( id='msg', style={'border':'1px solid olivegreen','overflow-y': 'scroll','white-space': 'pre', 'background':'darkslategray','color':'lightgray','padding':'20px','height':'275px'}, children='Welcome to Freedom')
         ])  
     ]),
     # Main graph

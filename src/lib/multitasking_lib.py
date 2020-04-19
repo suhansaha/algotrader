@@ -304,7 +304,7 @@ def kite_simulator(manager, msg):
 
     conn.set(stock, pd.DataFrame().to_json(orient='columns'))
     conn.set(stock+'Trade', pd.DataFrame().to_json(orient='columns'))
-    conn.set('logMsg','Backtest Started: {} :'.format(stock))
+    conn.set('logMsg','Backtest Started: {} :\n'.format(stock))
     for index, row in ohlc_data.iterrows(): 
         pdebug(row)
         update_plot_cache(stock, row)
