@@ -4,6 +4,10 @@ from lib.multitasking_lib import *
 
 logger.setLevel(logging.INFO)
 loggerT.setLevel(21)
+
+pinfo("================================")
+pinfo("***   Starting New Session   ***")
+pinfo("================================")
 #orderManager = threadManager("orderManager", ["order_handler"], [order_handler]) 
 #tradeManager = threadManager("tradeManager", ["order", "trade"], [hello_world1, hello_world2])
 freedom = threadManager("freedom_init", 

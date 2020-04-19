@@ -40,6 +40,15 @@ pinfo = lambda x: logger.info(x)
 perror = lambda x: logger.error(x)
 pexception = lambda x: logger.critical(x)
 pwarning = lambda x: logger.warning(x)
+
+from redis import Redis
+cache = Redis(host='redis', port=6379, db=0, charset="utf-8", decode_responses=True)
+#def logtrade(x):
+#    msg_bug = cache.get('logMsg')
+#    msg_bug = msg_bug + '<br>' + x
+#    cache.set('logMsg',msg_bug)
+#    loggerT.log(25, x)
+
 logtrade = lambda x: loggerT.log(25, x)
 
 #DEBUG_LEVELV_NUM = 9 

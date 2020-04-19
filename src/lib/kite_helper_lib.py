@@ -58,20 +58,20 @@ def getData(symbol, fromDate, toDate, exchange="NSE", freq="minute", force=False
         raw_data = pd.read_hdf(temp_file, key=key)
 
         if   (fromDate < lDate ) and (toDate <= rDate):
-            pinfo("Downloading data from fromDate to lDate")
+            pdebug("Downloading data from fromDate to lDate")
             temp_data = downloadData(symbol,  fromDate, lDate, freq)
             temp_data = temp_data.append(raw_data.tail(-1))
 #            temp_data.to_hdf("kite_data/kite_cache.h5", key=key, mode="a", format="table")
         elif (fromDate >=lDate ) and (toDate <= rDate):
-            pinfo("Using cache: Not downloading data")
+            pdebug("Using cache: Not downloading data")
             temp_data = raw_data
         elif (fromDate >= lDate ) and (toDate > rDate):
-            pinfo("Downloading data from rDate to toDate")
+            pdebug("Downloading data from rDate to toDate")
             temp_data = downloadData(symbol,  rDate, toDate, freq)
             temp_data = raw_data.append(temp_data.tail(-1))
 #            temp_data.to_hdf("kite_data/kite_cache.h5", key=key, mode="a", format="table")
         elif (fromDate < lDate ) and (toDate > rDate):
-            pinfo("Downloading data from fromDate to lDate")
+            pdebug("Downloading data from fromDate to lDate")
             temp_data = downloadData(symbol,  fromDate, lDate, freq)
             temp_data = temp_data.append(raw_data.tail(-1))
             logging.info("Downloading data from rDate to toDate")

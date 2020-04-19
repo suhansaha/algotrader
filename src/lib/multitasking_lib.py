@@ -1,6 +1,7 @@
 import threading
 import time
 import pandas as pd
+import math
 from queue import Queue
 from redis import Redis
 import multiprocessing
@@ -103,7 +104,7 @@ from datetime import datetime, timedelta
 import time
 
 def backtest_handler(manager, data):
-    pinfo('order_handler: {}'.format(data))
+    pdebug('order_handler: {}'.format(data))
 
     try:
         json_data = json.loads(data)
@@ -139,7 +140,78 @@ def backtest_handler(manager, data):
     conn.set('done',1)
     exec(algo)
     '''
-    
+ 
+
+def trade_analysis(stock):
+    trade_log = pd.read_json(conn.get(stock+'Trade'))
+
+    state = 'None'
+    trade_log['profit'] = 0
+    profit = 0
+    total_win = 0
+    total_loss = 0
+    max_profit = 0 
+    max_loss = 0
+    winning_streak = 0
+    loosing_stream = 0
+    prev_profit = 0
+    winning_streak = 1
+    loosing_streak = 1
+    max_winning_streak = 0
+    max_loosing_streak = 0
+
+    for index, row in trade_log.iterrows():
+        if not math.isnan(row.buy):
+            profit -= row['buy']
+            #print(row['buy'])  
+        if not math.isnan(row.sell):
+            profit += row['sell']
+            #print(row['sell'])
+
+        if state=='None':
+            trade_log.loc[index,'profit'] = 0
+            state='Trade'
+        else:
+            trade_log.loc[index,'profit'] = profit
+            if profit >=0:
+                total_win += 1
+                if profit > max_profit:
+                    max_profit = profit
+
+                if prev_profit > 0:
+                    winning_streak += 1
+                elif loosing_streak > max_loosing_streak:
+                    max_loosing_streak = loosing_streak
+                loosing_streak = 1    
+
+            else:
+                total_loss += 1
+                if profit < max_loss:
+                    max_loss = profit
+
+                if prev_profit < 0:
+                    loosing_streak += 1
+                elif winning_streak > max_winning_streak:
+                    max_winning_streak = winning_streak
+                winning_streak = 1
+
+            prev_profit = profit
+            profit = 0
+            state = 'None'
+
+    total_profit = trade_log.profit.sum()
+    trade_log['CumProfit'] = trade_log.profit.cumsum()
+
+    logtrade('============================================')
+    logtrade('Trade Analysis for : {}'.format(stock))
+    logtrade('--------------------------------------------')
+    logtrade('Profit: {}, max loss: {}, max win: {}'.format(total_profit, max_loss, max_profit))
+    logtrade('# of Win: {}, # of Loss: {}, max_winning_streak: {}, max_loosing_streak: {}'.format(total_win, total_loss, max_winning_streak, max_loosing_streak))
+
+    logtrade('--------------------------------------------')
+    logtrade('\n{}'.format(trade_log.fillna('')))
+    logtrade('============================================')
+       
 
 ################## Freedom App #######################
 no_of_hist_candles = 100
@@ -188,11 +260,11 @@ def order_handler(manager, msg):
     # Step 4: If not a papertrade: despatch order
         
 
-def update_plot_cache(stock, tmp_df):
-    cache_buff = pd.read_json(conn.get(stock))
+def update_plot_cache(key, tmp_df):
+    cache_buff = pd.read_json(conn.get(key))
     #tmp_df = ohlc_data.loc[index]
     cache_buff = cache_buff.append(tmp_df)
-    conn.set(stock, cache_buff.to_json(orient='columns'))
+    conn.set(key, cache_buff.to_json(orient='columns'))
 
 def kite_simulator(manager, msg):
     pdebug('kite_simulator: {}'.format(msg))
@@ -225,6 +297,8 @@ def kite_simulator(manager, msg):
     # Loop through OHLC data from local storage
 
     conn.set(stock, pd.DataFrame().to_json(orient='columns'))
+    conn.set(stock+'Trade', pd.DataFrame().to_json(orient='columns'))
+    conn.set('logMsg','Backtest Started: {} :'.format(stock))
     for index, row in ohlc_data.iterrows(): 
         pdebug(row)
         update_plot_cache(stock, row)
@@ -260,7 +334,25 @@ def kite_simulator(manager, msg):
 
     conn.set(stock, ohlc_data.to_json(orient='columns'))
     time.sleep(1)
+
+    #trade_analysis(stock)
     conn.set('done',1)
+
+    trade_analysis(stock)
+
+def placeorder(prefix, df, stock, last_processed):
+    logtrade(prefix+" : {} : {} -> {}".format(last_processed, stock, ohlc_get(df,'close')))
+
+    tmp_df = pd.DataFrame()
+    if prefix == "BUY " or prefix == "SO-B":
+        tmp_df['buy'] = df.iloc[-1:]['close']
+    else:
+        tmp_df['sell'] = df.iloc[-1:]['close']
+    #df.iloc[-1].index
+    #df.iloc[-1]['close']
+    update_plot_cache(stock+'Trade', tmp_df)
+
+
 
 
 def trade_handler(manager, msg):
@@ -306,10 +398,12 @@ def trade_handler(manager, msg):
             else: # Load data from OHLC buffer in hash
                 ohlc_data = pd.read_json(conn.hget(hash_key, 'ohlc'))
 
-            ohlc_data = ohlc_data.append(temp_df)
-            conn.hset(hash_key,'ohlc',ohlc_data.to_json())
+            ohlc_data = ohlc_data.append(temp_df) #Append to ohlc_data
 
             # Add to OHLCBuffer in hash
+            conn.hset(hash_key,'ohlc',ohlc_data.to_json())
+
+            # Start job to process Tick
             manager.add(stock, trade_job, False, hash_key)
             pdebug(msg[0])
             
@@ -360,12 +454,14 @@ def trade_job(hash_key):
         
         # 2: If Algo returns Buy: set State to 'Pending Order: Long'
         if tradeDecision=="BUY":
-            logtrade("BUY : {} : {} -> {}".format(last_processed, stock, ohlc_get(ohlc_df,'close')))
+            placeorder("BUY ", ohlc_df, stock, last_processed)
+            #logtrade("BUY : {} : {} -> {}".format(last_processed, stock, ohlc_get(ohlc_df,'close')))
             conn.hset(hash_key,'state','PO:LONG')
         
         # 3: If Algo returns Sell: set State to 'Pending Order: Short'
         elif tradeDecision=="SELL":
-            logtrade("SELL: {} : {} -> {}".format(last_processed, stock, ohlc_get(ohlc_df,'close')))
+            placeorder("SELL", ohlc_df, stock, last_processed)
+            #logtrade("SELL: {} : {} -> {}".format(last_processed, stock, ohlc_get(ohlc_df,'close')))
             conn.hset(hash_key,'state','PO:SHORT')
         
         # 4: Update TradeMetaData: Push order details to OrderQueue
@@ -392,7 +488,8 @@ def trade_job(hash_key):
         
         tradeDecision = algo_long_so(ohlc_df)
         if tradeDecision == "SELL":
-            logtrade("SO-S: {} : {} -> {}".format(last_processed, stock, ohlc_get(ohlc_df,'close')))
+            placeorder("SO-S", ohlc_df, stock, last_processed)
+            #logtrade("SO-S: {} : {} -> {}".format(last_processed, stock, ohlc_get(ohlc_df,'close')))
 
             # 3: If algo returns square off: then push square off details to OrderQueue, set state to 'Awaiting Square Off'   
             conn.hset(hash_key,'state','SQUAREOFF')
@@ -406,7 +503,8 @@ def trade_job(hash_key):
         tradeDecision = algo_short_so(ohlc_df)
         
         if tradeDecision == "BUY":
-            logtrade("SO-B: {} : {} -> {}".format(last_processed, stock, ohlc_get(ohlc_df,'close')))
+            placeorder("SO-B", ohlc_df, stock, last_processed)
+            #logtrade("SO-B: {} : {} -> {}".format(last_processed, stock, ohlc_get(ohlc_df,'close')))
         
             # 3: If algo returns square off: then push square off details to OrderQueue, set state to 'Awaiting Square Off'
     

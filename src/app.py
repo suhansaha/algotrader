@@ -6,8 +6,6 @@ from collections import deque
 from lib.logging_lib import *
 from lib.charting_lib import *
 
-
-logger.setLevel(logging.INFO)
 cache = redis.Redis(host='redis', port=6379, db=0, charset="utf-8", decode_responses=True)
 app = Flask(__name__)
 
@@ -87,8 +85,11 @@ def update_output(n_intervals ):
 
 
     ohlc_df.index.rename('date', inplace=True)
+
+    trade_df = pd.read_json(cache.get(stock+'Trade'), orient='columns')
     #pdebug(ohlc_df.head())
-    cache.set('logMsg',"{} :{}\n".format(stock, n_intervals))
+    #cache.set('logMsg',"{} :{}\n".format(stock, n_intervals))
+
     logMsg = cache.get('logMsg')
 
-    return render_charts(ohlc_df, stock), logMsg
+    return render_charts(ohlc_df, trade_df, stock), logMsg
