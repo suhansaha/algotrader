@@ -111,6 +111,7 @@ def backtest_handler(manager, data):
     fromDate = json_data['fromDate']
     algo = json_data['algo']
 
+    # TODO: Replace with getData
     temp_file = pd.HDFStore("data/kite_cache_day.h5", mode="r")
     tmpdata = temp_file.get('/day/NSE/'+stock)
 
