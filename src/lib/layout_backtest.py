@@ -26,7 +26,7 @@ layout_backtest = html.Div(children=[
 
             # Group 2
             html.Label("Algo:"),
-            dcc.Textarea(value='',style={'width': '100%', 'height':'200px'}, id='algo', rows=30, wrap='soft'),
+            dcc.Textarea(value='Algo:Suhan',style={'width': '100%', 'height':'200px'}, id='algo', rows=30, wrap='soft'),
             html.Br(),
             # Group 3
             html.Label("Date:", className='columns one'),

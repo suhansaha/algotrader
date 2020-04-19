@@ -6,6 +6,8 @@ from queue import Queue
 from redis import Redis
 import multiprocessing
 
+conn = Redis(host='redis', port=6379, db=0, charset="utf-8", decode_responses=True)
+
 from lib.logging_lib import *
 from lib.kite_helper_lib import *
 from lib.algo_lib import *
@@ -13,7 +15,6 @@ import sys
 
 exitFlag = 0
 
-conn = Redis(host='redis', port=6379, db=0, charset="utf-8", decode_responses=True)
 
 # The base thread class to enable multithreading
 class myThread (threading.Thread):
@@ -116,6 +117,7 @@ def backtest_handler(manager, data):
     fromDate = json_data['fromDate']
     algo = json_data['algo']
 
+    pdebug('backtest_handler: {}'.format(algo))
     #per1 = pd.date_range(start =fromDate, end =toDate, freq ='1D') 
     startDate = datetime.strptime(fromDate,'%Y-%m-%d') - timedelta(days=30)
 
@@ -126,7 +128,7 @@ def backtest_handler(manager, data):
     # Start Kite Simulator
     exchange = 'NSE'
     freq = 'day'
-    msg = json.dumps({'stock': stock, 'fromDate':fromDate,'toDate':toDate, 'exchange':exchange, 'freq':freq})
+    msg = json.dumps({'stock': stock, 'fromDate':fromDate,'toDate':toDate, 'exchange':exchange, 'freq':freq, 'algo':algo})
     conn.publish('trade_handler','start')
     conn.publish('kite_simulator',msg)
 
@@ -203,16 +205,16 @@ def trade_analysis(stock):
     trade_log['CumProfit'] = trade_log.profit.cumsum()
 
     logtrade('''
-====================================================
-*** Trade Analysis for : {}
-----------------------------------------------------
-Total Profit: {:.2f}
-Max Loss: {:.2f}, Max Win: {:.2f}
-# of Win: {}, # of Loss: {}
-Longest Winning Streak: {}, Longest Loosing Streak: {}
-----------------------------------------------------
-{}
-===================================================='''.format(stock, total_profit, max_loss, max_profit, total_win, total_loss, max_winning_streak, max_loosing_streak, trade_log.fillna(''))  )
+ ====================================================
+ *** Trade Analysis for : {}
+ ----------------------------------------------------
+  Total Profit: {:.2f}
+  Max Loss: {:.2f}, Max Win: {:.2f}
+  # of Win: {}, # of Loss: {}
+  Longest Winning Streak: {}, Longest Loosing Streak: {}
+ ----------------------------------------------------
+ {}
+ ===================================================='''.format(stock, total_profit, max_loss, max_profit, total_win, total_loss, max_winning_streak, max_loosing_streak, trade_log.fillna(''))  )
        
 
 ################## Freedom App #######################
@@ -292,7 +294,9 @@ def kite_simulator(manager, msg):
     except:
         pass
     
-    conn.hmset(hash_key, {'state':'INIT','stock':data['stock'], 'qty':0,'price':0,'algo':'','freq':data['freq'],'so':0,'target':0,'last_processed':'1999-01-01'})
+    pdebug('kite_simulator: {}'.format(data['algo']))
+
+    conn.hmset(hash_key, {'state':'INIT','stock':data['stock'], 'qty':0,'price':0,'algo':data['algo'],'freq':data['freq'],'so':0,'target':0,'last_processed':'1999-01-01'})
     
     
     #pdebug(ohlc_data.head())
@@ -427,6 +431,8 @@ def trade_job(hash_key):
         return
     stock = conn.hget(hash_key,'stock')
     freq = conn.hget(hash_key,'freq')
+    algo = conn.hget(hash_key,'algo')
+    
     pdebug("{}: {}: {}".format(hash_key, stock, state ))
     ohlc_df = pd.read_json(conn.hget(hash_key,'ohlc'))
     
@@ -452,7 +458,7 @@ def trade_job(hash_key):
     
     elif state == 'SCANNING':  # State: Scanning
         # 1: Run trading algorithm for entering trade
-        tradeDecision = algo_idle(ohlc_df)
+        tradeDecision = algo_idle(ohlc_df, algo)
         
         # 2: If Algo returns Buy: set State to 'Pending Order: Long'
         if tradeDecision=="BUY":
@@ -488,7 +494,7 @@ def trade_job(hash_key):
         
         # 2: Else run trading algorithm for square off
         
-        tradeDecision = algo_long_so(ohlc_df)
+        tradeDecision = algo_long_so(ohlc_df, algo)
         if tradeDecision == "SELL":
             placeorder("SO-S", ohlc_df, stock, last_processed)
             #logtrade("SO-S: {} : {} -> {}".format(last_processed, stock, ohlc_get(ohlc_df,'close')))
@@ -502,7 +508,7 @@ def trade_job(hash_key):
         # 1: If notification for AutoSquare Off: set state to init
         
         # 2: Else run trading algorithm for square off
-        tradeDecision = algo_short_so(ohlc_df)
+        tradeDecision = algo_short_so(ohlc_df, algo)
         
         if tradeDecision == "BUY":
             placeorder("SO-B", ohlc_df, stock, last_processed)

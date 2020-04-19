@@ -6,7 +6,8 @@ from datetime import timedelta
 from talib import MACD, MACDEXT, RSI, BBANDS, MACD, AROON, STOCHF, ATR, OBV, ADOSC, MINUS_DI, PLUS_DI, ADX, EMA, SMA
 from talib import LINEARREG, BETA, LINEARREG_INTERCEPT, LINEARREG_SLOPE, STDDEV, TSF, ADOSC, VAR, ROC
 from talib import CDLABANDONEDBABY, CDL3BLACKCROWS,CDLDOJI, CDLDOJISTAR, CDLDRAGONFLYDOJI,CDLENGULFING,CDLEVENINGDOJISTAR,CDLEVENINGSTAR, CDLGRAVESTONEDOJI, CDLHAMMER, CDLHANGINGMAN,CDLHARAMI,CDLHARAMICROSS,CDLINVERTEDHAMMER,CDLMARUBOZU,CDLMORNINGDOJISTAR,CDLMORNINGSTAR,CDLSHOOTINGSTAR,CDLSPINNINGTOP,CDL3BLACKCROWS, CDL3LINESTRIKE, CDLKICKING
-
+from lib.logging_lib import *
+conn = Redis(host='redis', port=6379, db=0, charset="utf-8", decode_responses=True)
 # ====== Tradescript Wrapper =======
 # Methods
 
@@ -37,7 +38,7 @@ def HAIKINASI(ohlc_data_df):
 
 ohlc_get = lambda df, key: df.iloc[-1][key]
 REF = lambda df, i: df.iloc[-i-1]
-def myalgo(ohlc_data_df): 
+def myalgo(ohlc_data_df, algo=''): 
     ohlc_data_temp = ohlc_data_df.tail(30)
     
     OPEN = ohlc_data_temp['open']
@@ -47,13 +48,27 @@ def myalgo(ohlc_data_df):
     VOLUME = ohlc_data_temp['volume']
     
     (haOPEN, haHIGH, haLOW, haCLOSE) = HAIKINASI(ohlc_data_temp)
+
+    decision = 'WAIT'
+    conn.set('decision',decision)
     
-    if (REF(haCLOSE,2) < REF(haOPEN,2)) and (REF(haCLOSE,1) < REF(haOPEN,1)) and (REF(haCLOSE,0) > REF(haOPEN,0)): 
-        return "BUY"
-    elif (REF(haCLOSE,2) > REF(haOPEN,2)) and (REF(haCLOSE,1) > REF(haOPEN,1)) and (REF(haCLOSE,0) < REF(haOPEN,0)): 
-        return "SELL"
-    
-    return "WAIT" #"BUY"|"SELL"
+    if algo != '':
+        postfix = '''\nconn.set('decision',decision)'''
+
+        try:
+            exec(algo+postfix)
+        except:
+            pass
+    else:
+        if (REF(haCLOSE,2) < REF(haOPEN,2)) and (REF(haCLOSE,1) < REF(haOPEN,1)) and (REF(haCLOSE,0) > REF(haOPEN,0)): 
+            decision = "BUY"
+        elif (REF(haCLOSE,2) > REF(haOPEN,2)) and (REF(haCLOSE,1) > REF(haOPEN,1)) and (REF(haCLOSE,0) < REF(haOPEN,0)): 
+            decision = "SELL"
+
+        conn.set('decision',decision)
+
+    decision = conn.get('decision')
+    return decision #"BUY"|"SELL"
 
 #ohlc_df = pd.read_json(conn.hget(stock+'_state','ohlc'))
 #myalgo(ohlc_df)
