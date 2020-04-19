@@ -115,13 +115,21 @@ def backtest_handler(manager, data):
     fromDate = json_data['fromDate']
     algo = json_data['algo']
 
-    per1 = pd.date_range(start =fromDate, end =toDate, freq ='1D') 
+    #per1 = pd.date_range(start =fromDate, end =toDate, freq ='1D') 
     startDate = datetime.strptime(fromDate,'%Y-%m-%d') - timedelta(days=30)
 
     startDatestr = startDate.strftime('%Y-%m-%d')
 
     tmpdata = getData(stock, startDatestr, toDate, 'NSE', 'day', False, stock) #TODO: remove hard-coding
 
+    # Start Kite Simulator
+    exchange = 'NSE'
+    freq = 'day'
+    msg = json.dumps({'stock': stock, 'fromDate':fromDate,'toDate':toDate, 'exchange':exchange, 'freq':freq})
+    conn.publish('trade_handler','start')
+    conn.publish('kite_simulator',msg)
+
+    '''
     for val in per1:
         data = tmpdata[(tmpdata.index >= startDate) & (tmpdata.index <= val)]
         conn.set(stock, data.to_json(orient='columns'))
@@ -130,10 +138,7 @@ def backtest_handler(manager, data):
 
     conn.set('done',1)
     exec(algo)
-    #OPEN = stock_data['open']
-    #CLOSE = stock_data['close']
-    #HIGH = stock_data['high']
-    #LOW = stock_data['low']
+    '''
     
 
 ################## Freedom App #######################
@@ -192,6 +197,7 @@ def kite_simulator(manager, msg):
         return
     #pdebug(data)
     
+    stock = data['stock']
     # Load data from the Cache
     ohlc_data = getData(data['stock'], data['fromDate'], data['toDate'], data['exchange'], data['freq']
                        , False, data['stock'])
@@ -210,6 +216,7 @@ def kite_simulator(manager, msg):
     
     #pdebug(ohlc_data.head())
     # Loop through OHLC data from local storage
+
     for index, row in ohlc_data.iterrows(): 
         # Check square off conditions
     
@@ -235,7 +242,15 @@ def kite_simulator(manager, msg):
         # Call notification_despatcher
         notification_despatcher(None, msg)
         # Optional: wait few miliseconds
-        time.sleep(0.01)    
+        time.sleep(0.1)
+
+    pinfo('Kite_Simulator: Done')
+    time.sleep(1)  
+    notification_despatcher(None, 'next')
+
+    conn.set(stock, ohlc_data.to_json(orient='columns'))
+    time.sleep(1)
+    conn.set('done',1)
 
 
 def trade_handler(manager, msg):

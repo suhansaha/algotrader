@@ -50,11 +50,11 @@ def start_backtest(n_clicks, stock, value, start_date, end_date, algo ):
     cache.publish('backtest',json.dumps(backtest_msg))
     
     # Start Kite Simulator
-    exchange = 'NSE'
-    freq = 'day'
-    msg = json.dumps({'stock': stock, 'fromDate':fromDate,'toDate':toDate, 'exchange':exchange, 'freq':freq})
-    cache.publish('trade_handler','start')
-    cache.publish('kite_simulator',msg)
+    #exchange = 'NSE'
+    #freq = 'day'
+    #msg = json.dumps({'stock': stock, 'fromDate':fromDate,'toDate':toDate, 'exchange':exchange, 'freq':freq})
+    #cache.publish('trade_handler','start')
+    #cache.publish('kite_simulator',msg)
 
     # Step 9: Return 0 to reset n_intervals count
     return 0 
@@ -81,8 +81,10 @@ def update_intervals(n_intervals, clicks):
     [Input('graph-update', 'n_intervals')])
 def update_output(n_intervals ):
     stock = cache.get('stock')
-    #pdebug("In update output: {}".format(stock))
-    ohlc_df = pd.read_json(cache.get(stock))
+    pdebug("In update output: {}".format(stock))
+    pdebug(cache.get(stock))
+    ohlc_df = pd.read_json(cache.get(stock), orient='columns')
+
 
     ohlc_df.index.rename('date', inplace=True)
     #pdebug(ohlc_df.head())
