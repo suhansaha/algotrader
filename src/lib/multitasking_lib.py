@@ -1,11 +1,13 @@
 import threading
 import time
+import pandas as pd
 from queue import Queue
 from redis import Redis
 import multiprocessing
 
 from lib.logging_lib import *
 from lib.kite_helper_lib import *
+from lib.algo_lib import *
 
 
 exitFlag = 0
@@ -26,7 +28,9 @@ class myThread (threading.Thread):
     def run(self):
         pdebug("Starting " + self.name)
         if self.pubsub:
+            pinfo("Starting Handler: " + self.name)
             self.thread_pubsub(self.callback)
+            pinfo("Terminating Handler: " + self.name)
         else:
             self.thread_worker(self.callback)
         pdebug("Exiting " + self.name)
@@ -99,7 +103,7 @@ from datetime import datetime, timedelta
 import time
 
 def backtest_handler(manager, data):
-    pdebug('order_handler: {}'.format(data))
+    pinfo('order_handler: {}'.format(data))
 
     try:
         json_data = json.loads(data)
@@ -232,7 +236,166 @@ def kite_simulator(manager, msg):
         # Optional: wait few miliseconds
         time.sleep(0.01)    
 
+
+def trade_handler(manager, msg):
+    pdebug('trade_handler: {}'.format(msg))
+    # Step 1: Blocking call to msgBufferQueue and notificationQueue
+    conn.xtrim('msgBufferQueue',maxlen=0, approximate=False)
+    conn.xtrim('notificationQueue',maxlen=0, approximate=False)
+    while(True):
+        msg_q = conn.xread({'msgBufferQueue':'$','notificationQueue':'$'}, block=0, count=100)
+        msgs_q = conn.xread({'msgBufferQueue':'0','notificationQueue':'0'}, block=1, count=100)
+        conn.xtrim('msgBufferQueue',maxlen=0, approximate=False)
+        conn.xtrim('notificationQueue',maxlen=0, approximate=False)
+        
+        # Step 2: Process notifications: Start a worker thread for each notification
+        
+        #TODO
+        
+        # Step 3: Process tick: Start a worker thread for each msg        
+        for msg in msgs_q[0][1]:
+            pdebug('trade_handler: {}'.format(msg[1]['msg']))
+            
+            try:
+                data = json.loads(msg[1]['msg'])
+            except:
+                perror("Un-supported message: {} : {}".format(msg, sys.exc_info()[0]))
+                break
+
+            for key in data.keys():
+                stock = key.split(':')[1]
+                exchange = key.split(':')[0]
+
+            hash_key = stock+'_state'
+            freq = conn.hget(hash_key,'freq')
+            state = conn.hget(hash_key,'state')
+
+
+            temp_df = msg_to_ohlc(data)
+            if state == 'INIT': # State: Init: Load historical data from cache
+                # 1: Populate Redis buffer stock+"OHLCBuffer" with historical data
+                toDate = (temp_df.index[0] - timedelta(days=1)).strftime('%Y-%m-%d')
+                fromDate = (temp_df.index[0] - timedelta(days=no_of_hist_candles)).strftime('%Y-%m-%d')
+                ohlc_data = getData(stock, fromDate, toDate, exchange, freq, False, stock)
+            else: # Load data from OHLC buffer in hash
+                ohlc_data = pd.read_json(conn.hget(hash_key, 'ohlc'))
+
+            ohlc_data = ohlc_data.append(temp_df)
+            conn.hset(hash_key,'ohlc',ohlc_data.to_json())
+
+            # Add to OHLCBuffer in hash
+            manager.add(stock, trade_job, False, hash_key)
+            pdebug(msg[0])
+            
+# A thread function to process notifications and tick
+algo_idle = myalgo
+algo_long_so = myalgo
+algo_short_so = myalgo
+
+trade_lock = Lock() #TODO: make lock per stockname
+def trade_job(hash_key):
+    pdebug('trade_job: {}'.format(hash_key))
     
+    trade_lock.acquire()
+    # Step 1.1: Get stock name from the message    
+    
+    # Step 1.2: Get state for the stock from the redis
+    state = conn.hget(hash_key,'state')
+    if not state:
+        return
+    stock = conn.hget(hash_key,'stock')
+    freq = conn.hget(hash_key,'freq')
+    pdebug("{}: {}: {}".format(hash_key, stock, state ))
+    ohlc_df = pd.read_json(conn.hget(hash_key,'ohlc'))
+    
+    last_processed = ohlc_df.index[-1].strftime('%Y-%m-%d')
+    pdebug("{}=>{}".format(last_processed,conn.hget(hash_key,'last_processed')))
+    
+    if last_processed == conn.hget(hash_key,'last_processed'):   
+        trade_lock.release()
+        return
+    else:
+        conn.hset(hash_key,'last_processed',last_processed)
+    
+    #print('{}:{}'.format(stock,ohlc_df.index[-1]))
+    
+    # Step 2: Switch to appropriate state machine based on current state
+    if state == 'INIT': # State: Init
+        # 1: Populate Redis buffer stock+"OHLCBuffer" with historical data
+            # Done inside thread handler
+        
+        # 2: Set state to Scanning
+        conn.hset(hash_key,'state','SCANNING')
+        pass
+    
+    elif state == 'SCANNING':  # State: Scanning
+        # 1: Run trading algorithm for entering trade
+        tradeDecision = algo_idle(ohlc_df)
+        
+        # 2: If Algo returns Buy: set State to 'Pending Order: Long'
+        if tradeDecision=="BUY":
+            logtrade("BUY : {} : {} -> {}".format(last_processed, stock, ohlc_get(ohlc_df,'close')))
+            conn.hset(hash_key,'state','PO:LONG')
+        
+        # 3: If Algo returns Sell: set State to 'Pending Order: Short'
+        elif tradeDecision=="SELL":
+            logtrade("SELL: {} : {} -> {}".format(last_processed, stock, ohlc_get(ohlc_df,'close')))
+            conn.hset(hash_key,'state','PO:SHORT')
+        
+        # 4: Update TradeMetaData: Push order details to OrderQueue
+    
+    elif state == 'PO:LONG': # State: Pending Order: Long
+    
+        # 1: On Fill: set State to Long
+        conn.hset(hash_key,'state','LONG')
+        pass
+    
+    
+    elif state == 'PO:SHORT': # State: Pending Order: Short
+    
+        # 1: On Fill: set State to Short
+        conn.hset(hash_key,'state','SHORT')
+        pass
+    
+    
+    elif state == 'LONG': # State: Long
+    
+        # 1: If notification for AutoSquare Off: set state to init
+        
+        # 2: Else run trading algorithm for square off
+        
+        tradeDecision = algo_long_so(ohlc_df)
+        if tradeDecision == "SELL":
+            logtrade("SO-S: {} : {} -> {}".format(last_processed, stock, ohlc_get(ohlc_df,'close')))
+
+            # 3: If algo returns square off: then push square off details to OrderQueue, set state to 'Awaiting Square Off'   
+            conn.hset(hash_key,'state','SQUAREOFF')
+    
+    
+    elif state == 'SHORT': # State: Short
+    
+        # 1: If notification for AutoSquare Off: set state to init
+        
+        # 2: Else run trading algorithm for square off
+        tradeDecision = algo_short_so(ohlc_df)
+        
+        if tradeDecision == "BUY":
+            logtrade("SO-B: {} : {} -> {}".format(last_processed, stock, ohlc_get(ohlc_df,'close')))
+        
+            # 3: If algo returns square off: then push square off details to OrderQueue, set state to 'Awaiting Square Off'
+    
+            conn.hset(hash_key,'state','SQUAREOFF')
+        
+    elif state == 'SQUAREOFF':  # State: Awaiting Square Off
+        
+        conn.hset(hash_key,'state','INIT')
+        pass
+   
+        # 1: On Fill notification: set state to Init
+
+    trade_lock.release()
+
+
 def user_requests_handler(manager, msg): 
     # {'request':'start|stop|pause|buy|sell|so|status','stock':'TCS', 'qty':10, 'price':1200}
     pdebug('user_requests_handler: {}'.format(msg))

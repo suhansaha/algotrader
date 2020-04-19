@@ -20,15 +20,19 @@ c_handler.setLevel(logging.DEBUG)
 c_handler.setFormatter(c_format)
 logger.addHandler(c_handler)
 
-#f_handler = logging.FileHandler('file.log')
-#f_handler.setLevel(logging.ERROR)
+f_handler = logging.FileHandler('log/freedom.log')
+f_handler.setLevel(logging.DEBUG)
+#f_format = logging.Formatter('%(levelname)s - %(message)s')
+f_handler.setFormatter(c_format)
 
-# Create formatters and add it to handlers
-#f_format = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-#f_handler.setFormatter(f_format)
+
+ft_handler = logging.FileHandler('log/freedom.log')
+ft_handler.setLevel(logging.DEBUG)
+ft_handler.setFormatter(t_format)
 
 # Add handlers to the logger
-#logger.addHandler(f_handler)
+logger.addHandler(f_handler)
+loggerT.addHandler(ft_handler)
 
 
 pdebug = lambda x: logger.debug(x)
