@@ -8,7 +8,7 @@ import multiprocessing
 from lib.logging_lib import *
 from lib.kite_helper_lib import *
 from lib.algo_lib import *
-
+import sys
 
 exitFlag = 0
 
@@ -187,6 +187,13 @@ def order_handler(manager, msg):
     
     # Step 4: If not a papertrade: despatch order
         
+
+def update_plot_cache(stock, tmp_df):
+    cache_buff = pd.read_json(conn.get(stock))
+    #tmp_df = ohlc_data.loc[index]
+    cache_buff = cache_buff.append(tmp_df)
+    conn.set(stock, cache_buff.to_json(orient='columns'))
+
 def kite_simulator(manager, msg):
     pdebug('kite_simulator: {}'.format(msg))
     
@@ -217,7 +224,10 @@ def kite_simulator(manager, msg):
     #pdebug(ohlc_data.head())
     # Loop through OHLC data from local storage
 
+    conn.set(stock, pd.DataFrame().to_json(orient='columns'))
     for index, row in ohlc_data.iterrows(): 
+        pdebug(row)
+        update_plot_cache(stock, row)
         # Check square off conditions
     
         # Construct Json message like Kite
