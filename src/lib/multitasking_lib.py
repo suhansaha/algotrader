@@ -202,15 +202,17 @@ def trade_analysis(stock):
     total_profit = trade_log.profit.sum()
     trade_log['CumProfit'] = trade_log.profit.cumsum()
 
-    logtrade('============================================')
-    logtrade('Trade Analysis for : {}'.format(stock))
-    logtrade('--------------------------------------------')
-    logtrade('Profit: {}, max loss: {}, max win: {}'.format(total_profit, max_loss, max_profit))
-    logtrade('# of Win: {}, # of Loss: {}, max_winning_streak: {}, max_loosing_streak: {}'.format(total_win, total_loss, max_winning_streak, max_loosing_streak))
-
-    logtrade('--------------------------------------------')
-    logtrade('\n{}'.format(trade_log.fillna('')))
-    logtrade('============================================')
+    logtrade('''
+====================================================
+*** Trade Analysis for : {}
+----------------------------------------------------
+Total Profit: {:.2f}
+Max Loss: {:.2f}, Max Win: {:.2f}
+# of Win: {}, # of Loss: {}
+Longest Winning Streak: {}, Longest Loosing Streak: {}
+----------------------------------------------------
+{}
+===================================================='''.format(stock, total_profit, max_loss, max_profit, total_win, total_loss, max_winning_streak, max_loosing_streak, trade_log.fillna(''))  )
        
 
 ################## Freedom App #######################
