@@ -3,35 +3,38 @@ import logging
 #logging.basicConfig(filemode='w+')
 #logging.basicConfig(format='%(levelname)s:\t%(message)s', datefmt='%m-%d %H:%M:%S')
 logger = logging.getLogger('freedom')
-logger.setLevel(logging.WARNING)
+logger.setLevel(0)
+
+# Stream handlers
+c_handler = logging.StreamHandler()
+c_format = logging.Formatter('%(levelname)s:\t%(message)s')
+c_handler.setLevel(logging.ERROR)
+c_handler.setFormatter(c_format)
+logger.addHandler(c_handler)
+
+# File handlers
+f_handler = logging.FileHandler('log/freedom.log', mode='w')
+f_handler.setLevel(0)
+#f_format = logging.Formatter('%(levelname)s - %(message)s')
+f_handler.setFormatter(c_format)
+logger.addHandler(f_handler)
+
+###### Logging trade ######
 loggerT = logging.getLogger('trade')
 loggerT.setLevel(25)
 
-# Trade handlers
+# LogTrade: Stream handlers
 t_handler = logging.StreamHandler()
 t_handler.setLevel(25)
 t_format = logging.Formatter('TRADE: %(message)s')
 t_handler.setFormatter(t_format)
 loggerT.addHandler(t_handler)
 
-c_handler = logging.StreamHandler()
-c_format = logging.Formatter('%(levelname)s:\t%(message)s')
-c_handler.setLevel(logging.DEBUG)
-c_handler.setFormatter(c_format)
-logger.addHandler(c_handler)
 
-f_handler = logging.FileHandler('log/freedom.log', mode='w')
-f_handler.setLevel(logging.DEBUG)
-#f_format = logging.Formatter('%(levelname)s - %(message)s')
-f_handler.setFormatter(c_format)
-
-
+# LogTrade: File handlers
 ft_handler = logging.FileHandler('log/freedom_trade.log', mode='w')
-ft_handler.setLevel(logging.DEBUG)
+ft_handler.setLevel(25)
 ft_handler.setFormatter(t_format)
-
-# Add handlers to the logger
-logger.addHandler(f_handler)
 loggerT.addHandler(ft_handler)
 
 
