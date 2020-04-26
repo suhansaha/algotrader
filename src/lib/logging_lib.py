@@ -1,6 +1,6 @@
 #setup logging
 import logging
-#logging.basicConfig(format='%(asctime)s:%(levelname)s:\t%(message)s', level=logging.DEBUG, datefmt='%m-%d %H:%M:%S')
+#logging.basicConfig(filemode='w+')
 #logging.basicConfig(format='%(levelname)s:\t%(message)s', datefmt='%m-%d %H:%M:%S')
 logger = logging.getLogger('freedom')
 logger.setLevel(logging.WARNING)
@@ -20,13 +20,13 @@ c_handler.setLevel(logging.DEBUG)
 c_handler.setFormatter(c_format)
 logger.addHandler(c_handler)
 
-f_handler = logging.FileHandler('log/freedom.log')
+f_handler = logging.FileHandler('log/freedom.log', mode='w')
 f_handler.setLevel(logging.DEBUG)
 #f_format = logging.Formatter('%(levelname)s - %(message)s')
 f_handler.setFormatter(c_format)
 
 
-ft_handler = logging.FileHandler('log/freedom.log')
+ft_handler = logging.FileHandler('log/freedom_trade.log', mode='w')
 ft_handler.setLevel(logging.DEBUG)
 ft_handler.setFormatter(t_format)
 

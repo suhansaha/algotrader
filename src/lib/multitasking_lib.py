@@ -214,7 +214,26 @@ def notification_despatcher(ws, msg, Tick=True ):
 
 
 '''
- 
+
+trade_lock_store = {} 
+simulator_lock = Lock()
+def trade_init(stock_key, algo, freq, qty, sl, target):        
+    # Initialize state
+    hash_key = stock_key+'_state'
+    
+    try:
+        all_keys = list(conn.hgetall(hash_key).keys())
+        conn.hdel(hash_key,*all_keys)
+    except:
+        pass
+    
+    conn.hmset(hash_key, {'state':'INIT','stock':stock_key, 'algo':algo, 'freq':freq,
+    'qty':qty,'price':0,'sl':sl,'target':target,'last_processed':'1999-01-01'})
+
+    conn.set(stock_key, pd.DataFrame().to_json(orient='columns')) #Used for plotting
+    conn.set(stock_key+'Trade', pd.DataFrame().to_json(orient='columns')) #Used for storing trade data
+    trade_lock_store[stock_key] = Lock()
+
 
 def kite_simulator(manager, msg):
     pinfo('kite_simulator: {}'.format(msg))
@@ -248,27 +267,15 @@ def kite_simulator(manager, msg):
         df = getData(stock_key, startDate, toDate, exchange, freq, False, stock_key)
         ohlc_data[stock_key] = df
 
-        # Initialize state
-        hash_key = stock_key+'_state'
-        
-        try:
-            all_keys = list(conn.hgetall(hash_key).keys())
-            conn.hdel(hash_key,*all_keys)
-        except:
-            pass
-        
-        conn.hmset(hash_key, {'state':'INIT','stock':stock_key, 'algo':algo, 'freq':freq,
-        'qty':qty,'price':0,'sl':sl,'target':target,'last_processed':'1999-01-01'})
+        trade_init(stock_key, algo, freq, qty, sl, target)
 
-        conn.set(stock_key, pd.DataFrame().to_json(orient='columns')) #Used for plotting
-        conn.set(stock_key+'Trade', pd.DataFrame().to_json(orient='columns')) #Used for storing trade data
-    
+    conn.publish('trade_handler','start')
 
     stock = data['stock'][-1] #TODO: Add for loop
-    conn.publish('trade_handler','start')
     conn.set('logMsg','Backtest Started: {} :\n'.format(stock)) # Used for displaying trade log
 
     no = ohlc_data[stock].shape[0]
+    counter = 0
     for i in np.linspace(0,no-1,no): # Push data
         i = int(i)
 
@@ -288,16 +295,18 @@ def kite_simulator(manager, msg):
             
             # Call notification_despatcher
             notification_despatcher(None, msg)
+            counter = counter + 1
             # Optional: wait few miliseconds
             #time.sleep(0.1)
 
     for stock in  data['stock']:
         conn.set(stock, ohlc_data[stock].to_json(orient='columns'))
     
-    pinfo('Kite_Simulator: Done')
-    time.sleep(1)  
-    notification_despatcher(None, 'next')
-    time.sleep(1)
+    pinfo('Kite_Simulator: Done: {}'.format(counter))
+    notification_despatcher(None, 'stop')
+    
+    simulator_lock.acquire()
+
     conn.set('done',1)
 
     for stock in  data['stock']:
@@ -312,30 +321,38 @@ def update_plot_cache(key, tmp_df):
 
 
 def trade_handler(manager, msg):
-    pdebug('trade_handler: {}'.format(msg))
-    # Step 1: Blocking call to msgBufferQueue and notificationQueue
+    pinfo('trade_handler: {}'.format(msg))
+
+    # Step 0: Clean queue
     conn.xtrim('msgBufferQueue',maxlen=0, approximate=False)
     conn.xtrim('notificationQueue',maxlen=0, approximate=False)
+
+    simulator_lock.acquire()
+     
+    counter = 0
     while(True):
-        msg_q = conn.xread({'msgBufferQueue':'$','notificationQueue':'$'}, block=0, count=100)
-        msgs_q = conn.xread({'msgBufferQueue':'0','notificationQueue':'0'}, block=1, count=100)
+        # Step 1: Blocking call to msgBufferQueue and notificationQueue
+        if conn.xlen('msgBufferQueue') == 0:
+            msg_q = conn.xread({'msgBufferQueue':'$','notificationQueue':'$'}, block=0, count=1000)
+        msgs_q = conn.xread({'msgBufferQueue':'0','notificationQueue':'0'}, block=2000, count=1000)
         conn.xtrim('msgBufferQueue',maxlen=0, approximate=False)
         conn.xtrim('notificationQueue',maxlen=0, approximate=False)
         
         # Step 2: Process notifications: Start a worker thread for each notification
-        
         #TODO
         
-        # Step 3: Process tick: Start a worker thread for each msg        
+        # Step 3: Process tick: Start a worker thread for each msg       
         for msg in msgs_q[0][1]:
-            pdebug('trade_handler: {}'.format(msg[1]['msg']))
-            
+            #pinfo('trade_handler: {}'.format(msg[1]['msg']))
+            counter = counter + 1
             try:
                 data = json.loads(msg[1]['msg'])
             except:
-                perror("Un-supported message: {} : {}".format(msg, sys.exc_info()[0]))
+                simulator_lock.release()
+                perror("Un-supported message: {}: {} : {}".format(counter, msg, sys.exc_info()[0]))
+                counter = 0
                 break
-
+            
             for key in data.keys():
                 stock = key.split(':')[1]
                 exchange = key.split(':')[0]
@@ -371,14 +388,10 @@ algo_idle = myalgo
 algo_long_so = myalgo
 algo_short_so = myalgo
 
-trade_lock = Lock() #TODO: make lock per stockname
 def trade_job(hash_key):
     pdebug('trade_job: {}'.format(hash_key))
     
-    trade_lock.acquire()
-    # Step 1.1: Get stock name from the message    
-    
-    # Step 1.2: Get state for the stock from the redis
+    # Step 1: Get state for the stock from the redis
     state = conn.hget(hash_key,'state')
     if not state:
         return
@@ -386,10 +399,13 @@ def trade_job(hash_key):
     freq = conn.hget(hash_key,'freq')
     algo = conn.hget(hash_key,'algo')
     
+    trade_lock = trade_lock_store[stock]
+    trade_lock.acquire()
+
     pdebug("{}: {}: {}".format(hash_key, stock, state ))
     ohlc_df = pd.read_json(conn.hget(hash_key,'ohlc'))
     
-    last_processed = ohlc_df.index[-1].strftime('%Y-%m-%d %H:%M:%S')
+    last_processed = ohlc_df.index[-1].strftime('%Y-%m-%d %H:%M')
     pdebug("{}=>{}".format(last_processed,conn.hget(hash_key,'last_processed')))
     
     if last_processed == conn.hget(hash_key,'last_processed'):   
@@ -442,7 +458,6 @@ def trade_job(hash_key):
     
     
     elif state == 'LONG': # State: Long
-    
         # 1: If notification for AutoSquare Off: set state to init
         
         # 2: Else run trading algorithm for square off
@@ -457,7 +472,6 @@ def trade_job(hash_key):
     
     
     elif state == 'SHORT': # State: Short
-    
         # 1: If notification for AutoSquare Off: set state to init
         
         # 2: Else run trading algorithm for square off
@@ -472,12 +486,10 @@ def trade_job(hash_key):
             conn.hset(hash_key,'state','SQUAREOFF')
         
     elif state == 'SQUAREOFF':  # State: Awaiting Square Off
-        
+        # 1: On Fill notification: set state to Init
         conn.hset(hash_key,'state','INIT')
         pass
    
-        # 1: On Fill notification: set state to Init
-
     trade_lock.release()
 
 

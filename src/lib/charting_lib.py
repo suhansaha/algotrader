@@ -46,8 +46,8 @@ plot_bbb =  lambda fig, df, pos = 1, fill=True, fillcolor="rgba(0,40,100,0.02)":
 
 
 def plot_trade(fig, df, pos=1):
-    fig.append_trace(go.Scatter(x=df.index.astype('str'), y=df['buy']*1.05 ,  mode='markers', marker=dict(color='green'),showlegend=False, hovertext=df['buy']), pos, 1)
-    fig.append_trace(go.Scatter(x=df.index.astype('str'), y=df['sell']*1.05,  mode='markers', marker=dict(color='red'),showlegend=False, hovertext=df['sell']), pos, 1)
+    fig.append_trace(go.Scatter(x=df.index.astype('str'), y=df['buy']*1.005 ,  mode='markers', marker=dict(color='green'),showlegend=False, hovertext=df['buy']), pos, 1)
+    fig.append_trace(go.Scatter(x=df.index.astype('str'), y=df['sell']*1.005,  mode='markers', marker=dict(color='red'),showlegend=False, hovertext=df['sell']), pos, 1)
     return fig
 
 
