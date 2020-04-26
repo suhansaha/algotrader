@@ -181,7 +181,7 @@ def msg_to_ohlc(data):
     svolume = ohlc_list['volume']
 
     temp_df = pd.DataFrame(ohlc_list, columns=['open','high','low','close','volume'], 
-                           index=[datetime.strptime(ohlc_list['date'],'%Y-%m-%d')])
+                           index=[datetime.strptime(ohlc_list['date'],'%Y-%m-%d %H:%M:%S')])
     
     return temp_df
 
@@ -233,11 +233,13 @@ def kite_simulator(manager, msg):
     target = data['target']
     qty = data['qty']
 
-    startDate = datetime.strptime(fromDate,'%Y-%m-%d') - timedelta(days=30)
+    startDate = datetime.strptime(fromDate,'%Y-%m-%d') - timedelta(days=1) #TODO
     startDatestr = startDate.strftime('%Y-%m-%d')
     exchange = 'NSE'
     freq = data['freq']
     algo = data['algo']
+    if not freq == 'day':
+        freq='minute'
 
     ohlc_data = {}
     for stock_key in data['stock']: #Initialize
@@ -245,8 +247,7 @@ def kite_simulator(manager, msg):
         # Load data from the Cache
         df = getData(stock_key, startDate, toDate, exchange, freq, False, stock_key)
         ohlc_data[stock_key] = df
-        
-        #pinfo(ohlc_data[stock_key].head())
+
         # Initialize state
         hash_key = stock_key+'_state'
         
@@ -268,7 +269,7 @@ def kite_simulator(manager, msg):
     conn.set('logMsg','Backtest Started: {} :\n'.format(stock)) # Used for displaying trade log
 
     no = ohlc_data[stock].shape[0]
-    for i in np.linspace(0,no-1,no):
+    for i in np.linspace(0,no-1,no): # Push data
         i = int(i)
 
         for stock in  data['stock']:
@@ -276,18 +277,19 @@ def kite_simulator(manager, msg):
             index = ohlc_data[stock].index[i]
         #for index, row in ohlc_data[stock].iterrows(): 
             update_plot_cache(stock, row)
+            #pinfo(row)
             # Check square off conditions
         
             # Construct Json message like Kite
-            mydate = "{}-{}-{}".format(index.year,index.month,index.day)        
+            mydate = "{}-{}-{} {}:{}:{}".format(index.year,index.month,index.day, index.hour, index.minute, index.second)        
             msg = {exchange+":"+stock:{"ohlc":{'date':mydate,'open':row['open'],'high':row['high'],'low':row['low'],'close':row['close'],'volume':row['volume']}}}
-            #pdebug(msg)
+            #pinfo(msg)
             msg = json.dumps(msg)
             
             # Call notification_despatcher
             notification_despatcher(None, msg)
             # Optional: wait few miliseconds
-            time.sleep(0.1)
+            #time.sleep(0.1)
 
     for stock in  data['stock']:
         conn.set(stock, ohlc_data[stock].to_json(orient='columns'))
@@ -346,13 +348,16 @@ def trade_handler(manager, msg):
             temp_df = msg_to_ohlc(data)
             if state == 'INIT': # State: Init: Load historical data from cache
                 # 1: Populate Redis buffer stock+"OHLCBuffer" with historical data
-                toDate = (temp_df.index[0] - timedelta(days=1)).strftime('%Y-%m-%d')
-                fromDate = (temp_df.index[0] - timedelta(days=no_of_hist_candles)).strftime('%Y-%m-%d')
+                toDate = (temp_df.index[0] - timedelta(days=1)).strftime('%Y-%m-%d') #TODO: Change based on freq
+                fromDate = (temp_df.index[0] - timedelta(days=2)).strftime('%Y-%m-%d')
                 ohlc_data = getData(stock, fromDate, toDate, exchange, freq, False, stock)
             else: # Load data from OHLC buffer in hash
                 ohlc_data = pd.read_json(conn.hget(hash_key, 'ohlc'))
+            
 
             ohlc_data = ohlc_data.append(temp_df) #Append to ohlc_data
+
+            #pinfo(ohlc_data.tail(1))
 
             # Add to OHLCBuffer in hash
             conn.hset(hash_key,'ohlc',ohlc_data.to_json())

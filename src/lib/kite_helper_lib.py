@@ -26,6 +26,7 @@ def resample2(data,freq):
     return data
 
 kite_cache_path = 'data/kite_cache_day.h5'
+kite_cache_path = 'data/kite_cache.h5'
 cache_lock = Lock()
 
 def getData(symbol, fromDate, toDate, exchange="NSE", freq="minute", force=False, symbolToken=''):
@@ -36,7 +37,7 @@ def getData(symbol, fromDate, toDate, exchange="NSE", freq="minute", force=False
         if symbolToken == '':
             symbolToken = instruments_df.loc[symbol,'instrument_token']
     except:
-        pdebug(symbol+":stock not in the list")
+        pwarning(symbol+":stock not in the list")
         return pd.DataFrame()
 
     #fromDate = dt.datetime(2019,4,8)

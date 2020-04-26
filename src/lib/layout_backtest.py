@@ -10,7 +10,7 @@ from datetime import timedelta
 df = pd.read_csv('data/ind_nifty50list.csv')
 
 # Loading OHLC data from local cache
-temp_file = pd.HDFStore("data/kite_cache_day.h5", mode="r")
+temp_file = pd.HDFStore("data/kite_cache.h5", mode="r")
 # Loading OHLC data for a stock for initial render
 #data = temp_file.get('/day/NSE/WIPRO').tail(100)['close']
 
@@ -30,8 +30,8 @@ layout_backtest = html.Div(children=[
                         options=pd.DataFrame({'label':df['Symbol'],'value':df['Symbol']}).to_dict(orient='records')),
 
         dcc.DatePickerRange( id='date-picker-range', className='columns five', end_date_placeholder_text='Select a date!',
-                end_date=temp_file.get('/day/NSE/WIPRO').index[-1].strftime("%Y-%m-%d"),
-                start_date=(temp_file.get('/day/NSE/WIPRO').index[-1] - timedelta(days=90)).strftime("%Y-%m-%d")),
+                end_date=temp_file.get('/minute/NSE/WIPRO').index[-1].strftime("%Y-%m-%d"),
+                start_date=(temp_file.get('/minute/NSE/WIPRO').index[-1] - timedelta(days=1)).strftime("%Y-%m-%d")),
         
         html.Br(),html.Br(),
         dcc.Textarea(value='', className='prettyprint lang-py',style={'width': '100%', 'height':'200px'}, id='algo', rows=30, wrap='soft'),
@@ -44,7 +44,7 @@ layout_backtest = html.Div(children=[
         
         html.Label("Target:", className='columns one'),
         dcc.Input(id='input-target', type='text', className='columns one', value='2'),
-        dcc.Dropdown(id='freq', style={'margin-left':'10px'}, value='day', multi=False,  className='columns two',
+        dcc.Dropdown(id='freq', style={'margin-left':'10px'}, value='1min', multi=False,  className='columns two',
                         options=[{'label':'day', 'value':'day'},{'label':'1min', 'value':'1min'}] ),
         html.Button('BackTest: Start', id='button', disabled=True, className='columns three'), 
         # Group 2

@@ -97,6 +97,8 @@ def update_output(n_intervals ):
     fig = ''
 
     if cache.get('done') == "1":
+    #if n_intervals % 10 == 0:
+        #pinfo(n_intervals)
         fig = freedom_chart(stock) ## to reduce load on processor
   
     return fig, logMsg
