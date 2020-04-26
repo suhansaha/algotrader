@@ -1,5 +1,5 @@
 import pandas as pd
-from lib.layout_bootstrap import *
+from lib.layout_backtest import *
 import redis
 from flask import Flask, render_template, request
 from collections import deque
@@ -10,8 +10,7 @@ cache = redis.Redis(host='redis', port=6379, db=0, charset="utf-8", decode_respo
 app = Flask(__name__)
 
 dash_app = dash.Dash(__name__, server=app, external_stylesheets=external_stylesheets)
-dash_app.layout = layout_bootstrap
-
+dash_app.layout = layout_backtest
 
 
 cache.set('done',1)
