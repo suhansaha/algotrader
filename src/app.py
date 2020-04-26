@@ -10,8 +10,8 @@ cache = redis.Redis(host='redis', port=6379, db=0, charset="utf-8", decode_respo
 app = Flask(__name__)
 
 dash_app = dash.Dash(__name__, server=app, external_stylesheets=external_stylesheets)
+dash_app.index_string = freedom_index_string
 dash_app.layout = layout_bootstrap
-
 
 
 cache.set('done',1)
@@ -72,7 +72,7 @@ def update_intervals(n_intervals, clicks):
 
     # if done is set to 1 then backtest is complete -> Time to disable interval and enable backtest button
     if cache.get('done') == "1": # Backtest complete
-        pdebug5("Returning True: Disable Interval")
+        pdebug("Returning True: Disable Interval")
         return True, False, 'BACKTEST: Start' 
     else: # Backtest is in progress
         pdebug1("Returning False: Enable Interval")

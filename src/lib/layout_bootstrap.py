@@ -99,3 +99,28 @@ layout_bootstrap = html.Div(
         dbc.Row(dbc.Col([tabs_top])),
     ]
 )
+
+
+freedom_index_string = '''
+<!DOCTYPE html>
+<html>
+    <head>
+        {%metas%}
+        <title>{%title%}: Suhan</title>
+        {%favicon%}
+        {%css%}
+    </head>
+    <body>
+        {%app_entry%}
+        <footer>
+            {%config%}
+            {%scripts%}
+            {%renderer%}
+        </footer>
+        <script>setTimeout(function(){ var myCodeMirror = CodeMirror.fromTextArea(document.getElementById('algo'),
+        {
+            lineNumbers: true, theme:'dracula',mode:'python'
+        }); }, 3000);</script>
+    </body>
+</html>
+'''
