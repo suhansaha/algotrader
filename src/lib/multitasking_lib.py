@@ -389,7 +389,7 @@ def trade_job(hash_key):
     pdebug("{}: {}: {}".format(hash_key, stock, state ))
     ohlc_df = pd.read_json(conn.hget(hash_key,'ohlc'))
     
-    last_processed = ohlc_df.index[-1].strftime('%Y-%m-%d')
+    last_processed = ohlc_df.index[-1].strftime('%Y-%m-%d %H:%M:%S')
     pdebug("{}=>{}".format(last_processed,conn.hget(hash_key,'last_processed')))
     
     if last_processed == conn.hget(hash_key,'last_processed'):   
