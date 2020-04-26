@@ -32,7 +32,7 @@ def start_backtest(n_clicks, stocks, qty, sl, target, start_date, end_date, algo
     if not isinstance(stocks,list):
         stocks = [stocks]
 
-    pdebug(stocks)
+    pdebug1(stocks)
     # Step 1: Create the msg for initiating backtest
     backtest_msg={
         'stock':stocks,
@@ -46,7 +46,7 @@ def start_backtest(n_clicks, stocks, qty, sl, target, start_date, end_date, algo
         'freq':freq
     }
 
-    pdebug(backtest_msg)
+    pdebug1(backtest_msg)
     # Step 2: Store the stock name under backtest in the redis cache
     for stock in stocks:
         cache.set('stock',stock)
@@ -67,14 +67,14 @@ def start_backtest(n_clicks, stocks, qty, sl, target, start_date, end_date, algo
     [Input('graph-update', 'n_intervals'), 
      Input('button', 'n_clicks')])
 def update_intervals(n_intervals, clicks):
-    pdebug("Update Intervals: {}: {}".format(n_intervals, cache.get('done')))
+    pdebug1("Update Intervals: {}: {}".format(n_intervals, cache.get('done')))
 
     # if done is set to 1 then backtest is complete -> Time to disable interval and enable backtest button
     if cache.get('done') == "1": # Backtest complete
-        pinfo("Returning True: Disable Interval")
+        pdebug5("Returning True: Disable Interval")
         return True, False, 'BACKTEST: Start' 
     else: # Backtest is in progress
-        pdebug("Returning False: Enable Interval")
+        pdebug1("Returning False: Enable Interval")
         return False, True, 'BACKTEST: In Progress'
 
 
@@ -91,7 +91,7 @@ def freedom_chart(symbol):
     [Input('graph-update', 'n_intervals')])
 def update_output(n_intervals ):
     stock = cache.get('stock')
-    pdebug("In update output: {}".format(stock))
+    pdebug1("In update output: {}".format(stock))
     
     logMsg = cache.get('logMsg')
     fig = ''

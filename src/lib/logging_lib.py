@@ -36,6 +36,8 @@ loggerT.addHandler(ft_handler)
 
 
 pdebug = lambda x: logger.debug(x)
+pdebug1 = lambda x: logger.log(1, x) # Tick: Very heavy logging
+pdebug5 = lambda x: logger.log(5, x) # Print dataframes
 pinfo = lambda x: logger.info(x)
 perror = lambda x: logger.error(x)
 pexception = lambda x: logger.critical(x)

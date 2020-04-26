@@ -31,14 +31,14 @@ class myThread (threading.Thread):
         self.msg = msg
         
     def run(self):
-        pdebug("Starting " + self.name)
+        pdebug1("Starting " + self.name)
         if self.pubsub:
             pinfo("Starting Handler: " + self.name)
             self.thread_pubsub(self.callback)
             pinfo("Terminating Handler: " + self.name)
         else:
             self.thread_worker(self.callback)
-        pdebug("Exiting " + self.name)
+        pdebug1("Exiting " + self.name)
     
     # The thread function for infinite threads which can expect IPC using Redis
     def thread_pubsub(self, callback):
@@ -57,7 +57,6 @@ class myThread (threading.Thread):
     
     #The thread function for one of tasks
     def thread_worker(self, callback):
-        #pdebug(conn.rpop(queue))
         callback(self.msg)
 
 jobs = []
@@ -95,7 +94,7 @@ class threadManager():
 ###                Freedom App                     ###
 ######################################################
 no_of_hist_candles = 100
-getDeltaT = lambda freq: timedelta(days=no_of_hist_candles) if freq == 'day' else timedelta(days=2)
+getDeltaT = lambda freq: timedelta(days=no_of_hist_candles) if freq == 'day' else timedelta(days=5)
 
 def trade_analysis(stock):
     trade_log = pd.read_json(conn.get(stock+'Trade'))
@@ -187,15 +186,14 @@ def msg_to_ohlc(data):
 
 # This function is called by Kite or Kite_Simulation
 def notification_despatcher(ws, msg, Tick=True ):
-    pdebug('notification_despatcher: {}'.format(msg))
+    pdebug1('notification_despatcher: {}'.format(msg))
     # Step 1: Extract msg type: Tick/Callbacks
     
     # Step 2.1: If Tick
     if Tick == True:
         # Push msg to msgBufferQueue
-        #pdebug(msg)
         msg_id = conn.xadd('msgBufferQueue',{'msg': msg})
-        pdebug("Despatcher: {}".format(msg_id))
+        pdebug1("Despatcher: {}".format(msg_id))
     
     # Step 2.2: else
     else:
@@ -235,14 +233,14 @@ def trade_init(stock_key, algo, freq, qty, sl, target):
 
 
 def kite_simulator(manager, msg):
-    pinfo('kite_simulator: {}'.format(msg))
+    pdebug('kite_simulator: {}'.format(msg))
 
     try:
         data = json.loads(msg)
     except:
         perror('kite_simulator: Invalid msg: {}'.format(msg))
         return
-    #pdebug(data)
+    pdebug5(data)
     
     toDate = data['toDate']
     fromDate = data['fromDate']
@@ -288,7 +286,7 @@ def kite_simulator(manager, msg):
             # Construct Json message like Kite
             mydate = "{}-{}-{} {}:{}:{}".format(index.year,index.month,index.day, index.hour, index.minute, index.second)        
             msg = {exchange+":"+stock:{"ohlc":{'date':mydate,'open':row['open'],'high':row['high'],'low':row['low'],'close':row['close'],'volume':row['volume']}}}
-            #pinfo(msg)
+            pdebug1(msg)
             msg = json.dumps(msg)
             
             # Call notification_despatcher
@@ -341,7 +339,7 @@ def trade_handler(manager, msg):
         
         # Step 3: Process tick: Start a worker thread for each msg       
         for msg in msgs_q[0][1]:
-            #pinfo('trade_handler: {}'.format(msg[1]['msg']))
+            pdebug1('trade_handler: {}'.format(msg[1]['msg']))
             counter = counter + 1
             try:
                 data = json.loads(msg[1]['msg'])
@@ -368,20 +366,22 @@ def trade_handler(manager, msg):
                 toDate = (temp_df.index[0] - timedelta(days=1)).strftime('%Y-%m-%d')
                 fromDate = (temp_df.index[0] - deltaT).strftime('%Y-%m-%d')
                 ohlc_data = getData(stock, fromDate, toDate, exchange, freq, False, stock)
+
+                ohlc_data = ohlc_data.tail(no_of_hist_candles)
             else: # Load data from OHLC buffer in hash
                 ohlc_data = pd.read_json(conn.hget(hash_key, 'ohlc'))
             
 
             ohlc_data = ohlc_data.append(temp_df) #Append to ohlc_data
 
-            #pinfo(ohlc_data.tail(1))
+            pdebug1(ohlc_data.tail(1))
 
             # Add to OHLCBuffer in hash
             conn.hset(hash_key,'ohlc',ohlc_data.to_json())
 
             # Start job to process Tick
             manager.add(stock, trade_job, False, hash_key)
-            pdebug(msg[0])
+            pdebug1(msg[0])
             
 # A thread function to process notifications and tick
 algo_idle = myalgo
@@ -389,7 +389,7 @@ algo_long_so = myalgo
 algo_short_so = myalgo
 
 def trade_job(hash_key):
-    pdebug('trade_job: {}'.format(hash_key))
+    pdebug1('trade_job: {}'.format(hash_key))
     
     # Step 1: Get state for the stock from the redis
     state = conn.hget(hash_key,'state')
@@ -402,11 +402,11 @@ def trade_job(hash_key):
     trade_lock = trade_lock_store[stock]
     trade_lock.acquire()
 
-    pdebug("{}: {}: {}".format(hash_key, stock, state ))
+    pdebug1("{}: {}: {}".format(hash_key, stock, state ))
     ohlc_df = pd.read_json(conn.hget(hash_key,'ohlc'))
     
     last_processed = ohlc_df.index[-1].strftime('%Y-%m-%d %H:%M')
-    pdebug("{}=>{}".format(last_processed,conn.hget(hash_key,'last_processed')))
+    pdebug1("{}=>{}".format(last_processed,conn.hget(hash_key,'last_processed')))
     
     if last_processed == conn.hget(hash_key,'last_processed'):   
         trade_lock.release()

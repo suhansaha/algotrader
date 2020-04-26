@@ -15,7 +15,7 @@ def downloadData(symbol="HDFC", fromDate= dt.datetime.now() - dt.timedelta(days 
     if type(symbolToken).__name__ == 'Series':
         symbolToken = symbolToken[symbol].values[0]
     
-    pdebug(freq)
+    pdebug5(freq)
     raw_data = pd.DataFrame(data=kite.historical_data(symbolToken, fromDate, toDate, freq, continuous=False))
     raw_data = raw_data.set_index('date').tz_localize(None)
     return raw_data
@@ -59,29 +59,29 @@ def getData(symbol, fromDate, toDate, exchange="NSE", freq="minute", force=False
         raw_data = pd.read_hdf(temp_file, key=key)
 
         if   (fromDate < lDate ) and (toDate <= rDate):
-            pdebug("Downloading data from fromDate to lDate")
+            pdebug5("Downloading data from fromDate to lDate")
             temp_data = downloadData(symbol,  fromDate, lDate, freq)
             temp_data = temp_data.append(raw_data.tail(-1))
 #            temp_data.to_hdf("kite_data/kite_cache.h5", key=key, mode="a", format="table")
         elif (fromDate >=lDate ) and (toDate <= rDate):
-            pdebug("Using cache: Not downloading data")
+            pdebug5("Using cache: Not downloading data")
             temp_data = raw_data
         elif (fromDate >= lDate ) and (toDate > rDate):
-            pdebug("Downloading data from rDate to toDate")
+            pdebug5("Downloading data from rDate to toDate")
             temp_data = downloadData(symbol,  rDate, toDate, freq)
             temp_data = raw_data.append(temp_data.tail(-1))
 #            temp_data.to_hdf("kite_data/kite_cache.h5", key=key, mode="a", format="table")
         elif (fromDate < lDate ) and (toDate > rDate):
-            pdebug("Downloading data from fromDate to lDate")
+            pdebug5("Downloading data from fromDate to lDate")
             temp_data = downloadData(symbol,  fromDate, lDate, freq)
             temp_data = temp_data.append(raw_data.tail(-1))
-            logging.info("Downloading data from rDate to toDate")
+            pdebug5("Downloading data from rDate to toDate")
             temp_data2 = downloadData(symbol,  rDate, toDate, freq)
             temp_data = temp_data.append(temp_data2.tail(-1))
 #            temp_data.to_hdf("kite_data/kite_cache.h5", key=key, mode="a", format="table")
 
     except Exception as e:
-        pdebug(e)
+        perror(e)
         temp_data = downloadData(symbol, fromDate, toDate, freq)
     finally:
         #temp_data.to_hdf(temp_file, key=key, mode="a")
@@ -94,7 +94,7 @@ def portfolioDownload(stocklist, toDate):
     stocklist_df = pd.DataFrame()
     for index, row in stocklist.iterrows():
         symbol = row[0]
-        pinfo("Downloading data for: "+symbol)
+        pdebug5("Downloading data for: "+symbol)
         temp_data = getData(symbol,  toDate - dt.timedelta(days = 5), toDate)
         temp_data['symbol'] = symbol
         temp_data.set_index(['symbol',temp_data.index], inplace=True)
