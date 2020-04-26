@@ -18,8 +18,6 @@ import ast
 from datetime import datetime, timedelta
 import time
 
-exitFlag = 0
-
 
 # The base thread class to enable multithreading
 class myThread (threading.Thread):
@@ -97,6 +95,7 @@ class threadManager():
 ###                Freedom App                     ###
 ######################################################
 no_of_hist_candles = 100
+getDeltaT = lambda freq: timedelta(days=no_of_hist_candles) if freq == 'day' else timedelta(days=2)
 
 def trade_analysis(stock):
     trade_log = pd.read_json(conn.get(stock+'Trade'))
@@ -252,7 +251,7 @@ def kite_simulator(manager, msg):
     target = data['target']
     qty = data['qty']
 
-    startDate = datetime.strptime(fromDate,'%Y-%m-%d') # - timedelta(days=1) #TODO
+    startDate = datetime.strptime(fromDate,'%Y-%m-%d') 
     exchange = 'NSE'
     freq = data['freq']
     algo = data['algo']
@@ -362,12 +361,11 @@ def trade_handler(manager, msg):
 
 
             temp_df = msg_to_ohlc(data)
-            getDeltaT = lambda freq: timedelta(days=no_of_hist_candles) if freq == 'day' else timedelta(days=1)
             if state == 'INIT': # State: Init: Load historical data from cache
                 # 1: Populate Redis buffer stock+"OHLCBuffer" with historical data
                 deltaT = getDeltaT(freq)
 
-                toDate = (temp_df.index[0] - deltaT).strftime('%Y-%m-%d') #TODO: Change based on freq
+                toDate = (temp_df.index[0] - timedelta(days=1)).strftime('%Y-%m-%d')
                 fromDate = (temp_df.index[0] - deltaT).strftime('%Y-%m-%d')
                 ohlc_data = getData(stock, fromDate, toDate, exchange, freq, False, stock)
             else: # Load data from OHLC buffer in hash
