@@ -59,6 +59,9 @@ RUN apk add --no-cache \
     apk add --no-cache \
         build-base
 RUN pip install --no-cache-dir --no-binary :all: tables h5py
+RUN pip uninstall -y enum34
+RUN pip install flask-login sqlalchemy flask-sqlalchemy alembic flask-migrate flask-mail dash-bootstrap-components  
+
 RUN apk --no-cache del build-base
 
 WORKDIR /code

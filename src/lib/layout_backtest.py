@@ -14,36 +14,42 @@ temp_file = pd.HDFStore("data/kite_cache_day.h5", mode="r")
 # Loading OHLC data for a stock for initial render
 #data = temp_file.get('/day/NSE/WIPRO').tail(100)['close']
 
+
 layout_backtest = html.Div(children=[ 
     # Sidebar
-    html.Div(className = 'columns five', children=[
+    html.Div(className = 'columns three', children=[
         html.Div(children=[
-            # Group 1
-            html.Label("Pick Stock(s):", className='columns twelve'),
-            html.Br(),
-            dcc.Dropdown(id='yaxis-column', value='TCS', multi=False,  className='columns twelve',
-                        options=pd.DataFrame({'label':df['Symbol'],'value':df['Symbol']}).to_dict(orient='records')),
-
-            # Group 2
-            html.Label("Algo:"),
-            dcc.Textarea(value='',style={'width': '100%', 'height':'200px'}, id='algo', rows=30, wrap='soft'),
-            html.Br(),
-            # Group 3
-            html.Label("Date:", className='columns one'),
-            dcc.DatePickerRange( id='date-picker-range', className='columns seven', end_date_placeholder_text='Select a date!',
-                    end_date=temp_file.get('/day/NSE/WIPRO').index[-1].strftime("%Y-%m-%d"),
-                    start_date=(temp_file.get('/day/NSE/WIPRO').index[-1] - timedelta(days=90)).strftime("%Y-%m-%d")),
-            html.Label("Qty:", className='columns one'),
-            dcc.Input(id='input-box', type='text', className='columns two'),
-            html.Br(), html.Br(), 
-            html.Button('BackTest: Start', id='button', disabled=True, className='columns five'),
-            html.Br(),html.Br(),
             # Group 4
-            html.Div( id='msg', style={'border':'1px solid olivegreen','overflow-y': 'scroll','white-space': 'pre', 'background':'darkslategray','color':'lightgray','padding':'20px','height':'275px'}, children='Welcome to Freedom')
+            html.Div( id='msg', style={'font-size':'0.8em','border':'1px solid olivegreen','overflow-y': 'scroll','white-space': 'pre', 'background':'darkslategray','color':'lightgray','padding':'20px','height':'650px'}, children='Welcome to Freedom')
         ])  
     ]),
     # Main graph
-    html.Div(className = 'columns seven', children=[
+    html.Div(className = 'columns nine', children=[
+        # Group 3
+        dcc.Dropdown(id='yaxis-column', value=['TCS','WIPRO'], multi=True,  className='columns six',
+                        options=pd.DataFrame({'label':df['Symbol'],'value':df['Symbol']}).to_dict(orient='records')),
+
+        dcc.DatePickerRange( id='date-picker-range', className='columns five', end_date_placeholder_text='Select a date!',
+                end_date=temp_file.get('/day/NSE/WIPRO').index[-1].strftime("%Y-%m-%d"),
+                start_date=(temp_file.get('/day/NSE/WIPRO').index[-1] - timedelta(days=90)).strftime("%Y-%m-%d")),
+        
+        html.Br(),html.Br(),
+        dcc.Textarea(value='', className='prettyprint lang-py',style={'width': '100%', 'height':'200px'}, id='algo', rows=30, wrap='soft'),
+        html.Br(),
+        html.Label("Qty:", className='columns one'),
+        dcc.Input(id='input-qty', type='text', className='columns two', value='10'),
+        
+        html.Label("SL:", className='columns one'),
+        dcc.Input(id='input-sl', type='text', className='columns one', value='1'),
+        
+        html.Label("Target:", className='columns one'),
+        dcc.Input(id='input-target', type='text', className='columns one', value='2'),
+        dcc.Dropdown(id='freq', style={'margin-left':'10px'}, value='day', multi=False,  className='columns two',
+                        options=[{'label':'day', 'value':'day'},{'label':'1min', 'value':'1min'}] ),
+        html.Button('BackTest: Start', id='button', disabled=True, className='columns three'), 
+        # Group 2
+        html.Br(),
+        html.Br(),
         dcc.Graph(id='example-graph'),
         dcc.Interval( id='graph-update', interval=1000, n_intervals=0, max_intervals=-1, disabled = True) ])
     ])

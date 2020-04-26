@@ -55,7 +55,7 @@ def plot_trade(fig, df, pos=1):
 def render_charts(data, trade, symbol):
     #temp_data = data
     #chart = go.Candlestick(x=price.index.astype('str'), open=price['open'], high=price['high'], low=price['low'], close=price['close'], name="Candlestick", showlegend=False)
-
+    
     fig = make_subplots(rows=3, cols=1, shared_xaxes=True, row_width=[3,1,5], vertical_spacing = 0.01)
     fig['layout']={'xaxis':{'rangeselector': {'buttons': [{'count': 1, 'label': '1h', 'step': 'hour', 'stepmode': 'backward'},
                                             {'count': 3, 'label': '3h', 'step': 'hour', 'stepmode': 'backward'},
@@ -69,30 +69,30 @@ def render_charts(data, trade, symbol):
                 'yaxis3': {'anchor': 'x3', 'domain': [0.0, 0.19], 'side': 'right', 'range':[0,100], 'tickvals':[0,30,70,100], 'ticks':'inside','gridcolor':'black', 'showgrid':True, 'linecolor':'black'},
                 'height': 750, 'plot_bgcolor': 'rgba(0,0,0,0)','title': {'text': 'Charts for '+symbol}}
 
-
-    price = data
-
-    pha = pd.DataFrame()
-    pha['open'], pha['high'],pha['low'],pha['close'] = HAIKINASI(price)
-
-    price['macd'], price['macdsignal'], price['macdhist'] = MACDEXT(price.close, fastperiod=12, slowperiod=26, signalperiod=9, fastmatype=1, slowmatype=1,signalmatype=1)
-    price['rsi'] = RSI(price.close, timeperiod=14)
-    price['bbt'], price['bbm'], price['bbb'] = BBANDS(price.close, timeperiod=20, nbdevup=1.6, nbdevdn=1.6, matype=0)
-
-    #price['buy'] = ohlc_data['close'][30:40]
-    #price['sell'] = ohlc_data['close'][50:51]
-        
-    #plot_candle(fig, price, 1)
-    plot_candle(fig, pha, 1)
     try:
+        price = data
+
+        pha = pd.DataFrame()
+        pha['open'], pha['high'],pha['low'],pha['close'] = HAIKINASI(price)
+
+        price['macd'], price['macdsignal'], price['macdhist'] = MACDEXT(price.close, fastperiod=12, slowperiod=26, signalperiod=9, fastmatype=1, slowmatype=1,signalmatype=1)
+        price['rsi'] = RSI(price.close, timeperiod=14)
+        price['bbt'], price['bbm'], price['bbb'] = BBANDS(price.close, timeperiod=20, nbdevup=1.6, nbdevdn=1.6, matype=0)
+
+        #price['buy'] = ohlc_data['close'][30:40]
+        #price['sell'] = ohlc_data['close'][50:51]
+            
+        #plot_candle(fig, price, 1)
+        plot_candle(fig, pha, 1)
+        
         price['buy'] = trade['buy']
         price['sell'] = trade['sell']
         fig = plot_trade(fig, price, 1)
+        
+        fig = plot_bbb(fig, price, 1)
+        fig = plot_macd(fig, price, 2)
+        fig = plot_rsi(fig, price, 3)
     except:
         pass
-    fig = plot_bbb(fig, price, 1)
-    fig = plot_macd(fig, price, 2)
-    fig = plot_rsi(fig, price, 3)
-
 
     return fig
