@@ -36,52 +36,50 @@ navbar = dbc.NavbarSimple(
     dark=True,
 )
 
-algo_input = dbc.FormGroup(
-    [dbc.InputGroup(
-            [
-                dbc.Input(placeholder="Filename"),
-                dbc.Button("Save", color="secondary", className="mr-1"),
-            ]),
-        dbc.Textarea(className="mb-3", style={'height':'500px'}, id='algo', value="")
-    ]
-)
+algo_input = dbc.FormGroup([dbc.InputGroup([dbc.Input(placeholder="Filename"),dbc.InputGroupAddon(dbc.Button("Save", color="secondary"), addon_type="append")],size="sm"),
+                            dbc.Textarea(className="mb-3", style={'height':'500px'}, id='algo', value="")
+                        ])
 
 log_div = html.Div( id='msg', style={'font-size':'0.8em','border':'1px solid olivegreen','overflow-y': 'scroll',
 'white-space': 'pre', 'background':'darkslategray','color':'lightgray','padding':'20px','height':'350px'}, children='Welcome to Freedom')
 
-graph_div = html.Div([dcc.Graph(id='example-graph'),
+
+
+
+cal_end_date = temp_file.get('/minute/NSE/WIPRO').index[-1].strftime("%Y-%m-%d")
+cal_start_date = (temp_file.get('/minute/NSE/WIPRO').index[-1] - timedelta(days=10)).strftime("%Y-%m-%d")
+freq_options = [{'label':'day', 'value':'day'},{'label':'1min', 'value':'1min'},{'label':'5min', 'value':'5min','disabled':True},{'label':'10min', 'value':'10min','disabled':True},{'label':'15min', 'value':'15min','disabled':True}]
+stock_options = pd.DataFrame({'label':df['Symbol'],'value':df['Symbol']}).to_dict(orient='records')
+
+graph_div = dbc.FormGroup([
+        dcc.Dropdown(id='select_chart', options=stock_options),
+        dcc.Graph(id='example-graph'),
         dcc.Interval( id='graph-update', interval=1000, n_intervals=0, max_intervals=-1, disabled = True)])
 
-btn_div = html.Div([dcc.Dropdown(id='yaxis-column', value=['TCS','WIPRO'], multi=True,  className='columns six',
-                        options=pd.DataFrame({'label':df['Symbol'],'value':df['Symbol']}).to_dict(orient='records')),
-
-        dcc.DatePickerRange( id='date-picker-range', className='columns five', end_date_placeholder_text='Select a date!',
-                end_date=temp_file.get('/minute/NSE/WIPRO').index[-1].strftime("%Y-%m-%d"),
-                start_date=(temp_file.get('/minute/NSE/WIPRO').index[-1] - timedelta(days=10)).strftime("%Y-%m-%d")),
-        
-        html.Label("Qty:", className='columns one'),
-        dcc.Input(id='input-qty', type='text', className='columns two', value='10'),
-        
-        html.Label("SL:", className='columns one'),
-        dcc.Input(id='input-sl', type='text', className='columns one', value='1'),
-        
-        html.Label("Target:", className='columns one'),
-        dcc.Input(id='input-target', type='text', className='columns one', value='2'),
-        dcc.Dropdown(id='freq', style={'margin-left':'10px'}, value='day', multi=False,  className='columns two',
-                        options=[{'label':'day', 'value':'day'},{'label':'1min', 'value':'1min'}] ),
-        html.Button('BackTest: Start', id='button', disabled=True, className='columns three')])
+form_div = html.Div([
+            dcc.Dropdown(id='yaxis-column', value=['TCS','WIPRO'], multi=True,  className='columns six', options=stock_options),
+            dbc.Row([
+                dbc.Col(dbc.InputGroup([ dbc.InputGroupAddon("Qty", addon_type="prepend"),dbc.Input(id="input-qty", value=10) ], size="sm"),width=2),
+                dbc.Col(dbc.InputGroup([ dbc.InputGroupAddon("SL", addon_type="prepend"),dbc.Input(id="input-sl", placeholder="0.0", value=1),dbc.InputGroupAddon("%", addon_type="append") ], size="sm"),width=2),
+                dbc.Col(dbc.InputGroup([ dbc.InputGroupAddon("Target", addon_type="prepend"),dbc.Input(id="input-target", placeholder="0.0", value=1),dbc.InputGroupAddon("%", addon_type="append") ], size="sm"),width=2),
+                dbc.Col( dbc.InputGroup([ dcc.DatePickerRange( id='date-picker-range', end_date=cal_end_date, start_date=cal_start_date),
+                                            dbc.Select(id='freq', value='day', options=freq_options )], size="sm"), width=6, sm='12', md=5),
+                dbc.Col(dbc.Button('Go', id='button', color="success", disabled=True, size='sm'),width=1)
+            ], no_gutters=True),
+        ])
 
 tabs_bottom = dbc.Tabs(
     [
         dbc.Tab(graph_div, label="Trade Charts"),
-        dbc.Tab(log_div, label="Trade Logs"),
+        dbc.Tab("Trade Summary", label="Trade Summary"),
+        dbc.Tab(log_div, label="Logs"),
         dbc.Tab("Console", label="Console"),
     ], 
 )
 
 backtest_tab = dbc.Row([
     dbc.Col(algo_input),
-    dbc.Col([btn_div,tabs_bottom])]
+    dbc.Col([form_div,tabs_bottom])]
 )
 
 tabs_top = dbc.Tabs(
@@ -95,8 +93,8 @@ tabs_top = dbc.Tabs(
 
 layout_bootstrap = html.Div(
     [
-        dbc.Row([dbc.Col(navbar)]),
-        dbc.Row(dbc.Col([tabs_top])),
+        dbc.Row(dbc.Col(navbar)),
+        dbc.Row(dbc.Col(tabs_top)),
     ]
 )
 
@@ -120,7 +118,7 @@ freedom_index_string = '''
         <script>setTimeout(function(){ var myCodeMirror = CodeMirror.fromTextArea(document.getElementById('algo'),
         {
             lineNumbers: true, theme:'dracula',mode:'python'
-        }); }, 3000);</script>
+        }); }, 1000);</script>
     </body>
 </html>
 '''

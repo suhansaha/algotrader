@@ -1,3 +1,13 @@
 .CodeMirror{
     height:550px
 }
+
+.DateInput_input{
+    font-size:0.6em;
+    font-weight:bold;
+    padding:0px 10px 3px 10px;
+    line-height:18px;
+}
+.DateInput_1{width:80px}
+
+.DateRangePickerInput_arrow_sv{width:14px; height:14px}

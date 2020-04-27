@@ -73,10 +73,10 @@ def update_intervals(n_intervals, clicks):
     # if done is set to 1 then backtest is complete -> Time to disable interval and enable backtest button
     if cache.get('done') == "1": # Backtest complete
         pdebug("Returning True: Disable Interval")
-        return True, False, 'BACKTEST: Start' 
+        return True, False, 'Go' 
     else: # Backtest is in progress
         pdebug1("Returning False: Enable Interval")
-        return False, True, 'BACKTEST: In Progress'
+        return False, True, 'Wait'
 
 
 def freedom_chart(symbol):
