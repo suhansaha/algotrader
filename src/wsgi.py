@@ -2,7 +2,7 @@ from app import app
 #!/usr/bin/python
 from lib.multitasking_lib import *
 
-logger.setLevel(5)
+logger.setLevel(logging.INFO)
 loggerT.setLevel(21)
 
 pinfo("================================")

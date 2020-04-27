@@ -40,7 +40,6 @@ def start_backtest(n_clicks, stocks, qty, sl, target, start_date, end_date, algo
         'sl':sl,
         'target':target,
         'qty':qty,
-        #'data':data.to_json(orient='records'),
         'algo':algo,
         'fromDate':fromDate,
         'toDate':toDate,
@@ -58,6 +57,7 @@ def start_backtest(n_clicks, stocks, qty, sl, target, start_date, end_date, algo
     # Step 4: Done is set to 0: Backtest is in progress, will be resetted by backtest job
     cache.set('done',0)
     # Step 5: Send the msg to backtest thread to initiate the back test
+    pdebug(json.dumps(backtest_msg))
     cache.publish('kite_simulator',json.dumps(backtest_msg))
     
     # Step 6: Return 0 to reset n_intervals count

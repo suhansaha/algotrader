@@ -97,6 +97,7 @@ no_of_hist_candles = 100
 getDeltaT = lambda freq: timedelta(days=no_of_hist_candles) if freq == 'day' else timedelta(days=5)
 
 def trade_analysis(stock):
+    pdebug1("trade_analysis: {}".format(stock))
     trade_log = pd.read_json(conn.get(stock+'Trade'))
 
     state = 'None'
@@ -299,14 +300,21 @@ def kite_simulator(manager, msg):
         conn.set(stock, ohlc_data[stock].to_json(orient='columns'))
     
     pinfo('Kite_Simulator: Done: {}'.format(counter))
-    notification_despatcher(None, 'stop')
+    notification_despatcher(None, 'done')
     
     simulator_lock.acquire()
 
-    conn.set('done',1)
+    pdebug('Kite_Simulator: Trade Handler Done')
 
-    for stock in  data['stock']:
-        trade_analysis(stock)
+    conn.set('done',1)
+    for key in data['stock']:
+        pdebug1(key)
+        try:
+            trade_analysis(key)
+        except:
+            pass
+    
+    pdebug('Kite_Simulator: Trade Analysis Done')
 
 
 def update_plot_cache(key, tmp_df):
