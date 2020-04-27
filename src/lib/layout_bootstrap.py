@@ -7,6 +7,7 @@ external_stylesheets = [dbc.themes.BOOTSTRAP]
 from dash.dependencies import Input, Output, State
 from datetime import datetime as dt
 from datetime import timedelta
+import dash_editor_components
 
 df = pd.read_csv('data/ind_nifty50list.csv')
 
@@ -36,9 +37,10 @@ navbar = dbc.NavbarSimple(
     dark=True,
 )
 
-algo_input = dbc.FormGroup([dbc.InputGroup([dbc.Input(placeholder="Filename"),dbc.InputGroupAddon(dbc.Button("Save", color="secondary"), addon_type="append")],size="sm"),
-                            dbc.Textarea(className="mb-3", style={'height':'500px'}, id='algo', value="")
-                        ])
+algo_input = html.Div(dbc.FormGroup([dbc.InputGroup([dbc.Input(placeholder="Filename"),dbc.InputGroupAddon(dbc.Button("Save", color="secondary"), addon_type="append")],size="sm"),
+                         #   dbc.Textarea(className="mb-3", style={'height':'500px'}, id='algo', value=""),
+                            dash_editor_components.PythonEditor(id='algo', value='')
+                        ]), style={'max-width':'700px'})
 
 log_div = html.Div( id='msg', style={'font-size':'0.8em','border':'1px solid olivegreen','overflow-y': 'scroll',
 'white-space': 'pre', 'background':'darkslategray','color':'lightgray','padding':'20px','height':'350px'}, children='Welcome to Freedom')
@@ -71,7 +73,7 @@ form_div = html.Div([
 tabs_bottom = dbc.Tabs(
     [
         dbc.Tab(graph_div, label="Trade Charts"),
-        dbc.Tab("Trade Summary", label="Trade Summary"),
+        dbc.Tab("Trade Summary: collapse", label="Trade Summary"),
         dbc.Tab(log_div, label="Logs"),
         dbc.Tab("Console", label="Console"),
     ], 
@@ -97,28 +99,3 @@ layout_bootstrap = html.Div(
         dbc.Row(dbc.Col(tabs_top)),
     ]
 )
-
-
-freedom_index_string = '''
-<!DOCTYPE html>
-<html>
-    <head>
-        {%metas%}
-        <title>{%title%}: Suhan</title>
-        {%favicon%}
-        {%css%}
-    </head>
-    <body>
-        {%app_entry%}
-        <footer>
-            {%config%}
-            {%scripts%}
-            {%renderer%}
-        </footer>
-        <script>setTimeout(function(){ var myCodeMirror = CodeMirror.fromTextArea(document.getElementById('algo'),
-        {
-            lineNumbers: true, theme:'dracula',mode:'python'
-        }); }, 1000);</script>
-    </body>
-</html>
-'''

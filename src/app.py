@@ -10,7 +10,6 @@ cache = redis.Redis(host='redis', port=6379, db=0, charset="utf-8", decode_respo
 app = Flask(__name__)
 
 dash_app = dash.Dash(__name__, server=app, external_stylesheets=external_stylesheets)
-dash_app.index_string = freedom_index_string
 dash_app.layout = layout_bootstrap
 
 

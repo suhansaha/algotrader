@@ -60,10 +60,12 @@ def myalgo(ohlc_data_df, algo=''):
         except:
             pass
     else:
-        if (REF(haCLOSE,2) < REF(haOPEN,2)) and (REF(haCLOSE,1) < REF(haOPEN,1)) and (REF(haCLOSE,0) > REF(haOPEN,0)): 
-            decision = "BUY"
-        elif (REF(haCLOSE,2) > REF(haOPEN,2)) and (REF(haCLOSE,1) > REF(haOPEN,1)) and (REF(haCLOSE,0) < REF(haOPEN,0)): 
-            decision = "SELL"
+        upper, middle, lower = BBANDS(CLOSE)
+
+        if (REF(LOW,0) < REF(lower,0)) and (REF(haCLOSE,2) < REF(haOPEN,2)) and (REF(haCLOSE,1) < REF(haOPEN,1)) and (REF(haCLOSE,0) > REF(haOPEN,0)): 
+                    decision = "BUY"
+        elif (REF(HIGH,0) > REF(upper,0)) and (REF(haCLOSE,2) > REF(haOPEN,2)) and (REF(haCLOSE,1) > REF(haOPEN,1)) and (REF(haCLOSE,0) < REF(haOPEN,0)): 
+                    decision = "SELL"
 
         conn.set('decision',decision)
 
