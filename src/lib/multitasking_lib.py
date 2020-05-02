@@ -6,18 +6,17 @@ from queue import Queue
 from redis import Redis
 import multiprocessing
 import numpy as np
-
-conn = Redis(host='redis', port=6379, db=0, charset="utf-8", decode_responses=True)
-
 from lib.logging_lib import *
 from lib.kite_helper_lib import *
 from lib.algo_lib import *
+from lib.data_model_lib import *
 import sys
 import json
 import ast
 from datetime import datetime, timedelta
 import time
-
+logger.setLevel(logging.DEBUG)
+loggerT.setLevel(21)
 
 # The base thread class to enable multithreading
 class myThread (threading.Thread):
@@ -42,7 +41,7 @@ class myThread (threading.Thread):
     
     # The thread function for infinite threads which can expect IPC using Redis
     def thread_pubsub(self, callback):
-        pubsub = conn.pubsub()
+        pubsub = cache.pubsub()
         pubsub.subscribe([self.name])
         
         pubsub.get_message(self.name)
@@ -60,6 +59,8 @@ class myThread (threading.Thread):
         callback(self.msg)
 
 jobs = []
+cache_postfix = ""
+cache = ""
 class threadManager():
     def __init__(self, name, thread_list, callback_list):
         self.threads = []
@@ -73,6 +74,9 @@ class threadManager():
         self.job.start()
         
     def init(self):
+        global cache_postfix, cache
+        cache_postfix = self.name
+        cache = cache_state(cache_postfix)
         # Create new threads
         for tName in self.threadList:
             self.add(tName, self.threadCallback[self.threadID-1])
@@ -98,7 +102,7 @@ getDeltaT = lambda freq: timedelta(days=no_of_hist_candles) if freq == 'day' els
 
 def trade_analysis(stock):
     pdebug1("trade_analysis: {}".format(stock))
-    trade_log = pd.read_json(conn.get(stock+'Trade'))
+    trade_log = cache.getTrades(stock)
 
     state = 'None'
     trade_log['profit'] = 0
@@ -117,11 +121,9 @@ def trade_analysis(stock):
 
     for index, row in trade_log.iterrows():
         if not math.isnan(row.buy):
-            profit -= row['buy']
-            #print(row['buy'])  
+            profit -= row['buy'] 
         if not math.isnan(row.sell):
             profit += row['sell']
-            #print(row['sell'])
 
         if state=='None':
             trade_log.loc[index,'profit'] = 0
@@ -193,13 +195,13 @@ def notification_despatcher(ws, msg, Tick=True ):
     # Step 2.1: If Tick
     if Tick == True:
         # Push msg to msgBufferQueue
-        msg_id = conn.xadd('msgBufferQueue',{'msg': msg})
+        msg_id = cache.xadd('msgBufferQueue'+cache_postfix,{'msg': msg})
         pdebug1("Despatcher: {}".format(msg_id))
     
     # Step 2.2: else
     else:
         # Push msg to notificationQueue
-        conn.xadd('notificationQueue',{'msg': msg})
+        cache.xadd('notificationQueue'+cache_postfix,{'msg': msg})
 
 ###################### BackTest ######################
 '''
@@ -217,19 +219,17 @@ trade_lock_store = {}
 simulator_lock = Lock()
 def trade_init(stock_key, algo, freq, qty, sl, target):        
     # Initialize state
-    hash_key = stock_key+'_state'
     
-    try:
-        all_keys = list(conn.hgetall(hash_key).keys())
-        conn.hdel(hash_key,*all_keys)
-    except:
-        pass
-    
-    conn.hmset(hash_key, {'state':'INIT','stock':stock_key, 'algo':algo, 'freq':freq,
-    'qty':qty,'price':0,'sl':sl,'target':target,'last_processed':'1999-01-01'})
+    cache.add(stock_key, reset=True)
 
-    conn.set(stock_key, pd.DataFrame().to_json(orient='columns')) #Used for plotting
-    conn.set(stock_key+'Trade', pd.DataFrame().to_json(orient='columns')) #Used for storing trade data
+    cache.setValue(stock_key, 'algo', algo)
+    cache.setValue(stock_key, 'freq', freq)
+    cache.setValue(stock_key, 'qty', qty)
+    cache.setValue(stock_key, 'sl', sl)
+    cache.setValue(stock_key, 'target', target)
+
+    cache.set(stock_key, pd.DataFrame().to_json(orient='columns')) #Used for plotting
+    
     trade_lock_store[stock_key] = Lock()
 
 
@@ -266,10 +266,10 @@ def kite_simulator(manager, msg):
 
         trade_init(stock_key, algo, freq, qty, sl, target)
 
-    conn.publish('trade_handler','start')
+    cache.publish('trade_handler','start')
 
     stock = data['stock'][-1] #TODO: Add for loop
-    conn.set('logMsg','Backtest Started: {} :\n'.format(stock)) # Used for displaying trade log
+    cache.set('logMsg','Backtest Started: {} :\n'.format(stock)) # Used for displaying trade log
 
     no = ohlc_data[stock].shape[0]
     counter = 0
@@ -279,13 +279,13 @@ def kite_simulator(manager, msg):
         for stock in  data['stock']:
             row = ohlc_data[stock].iloc[i]
             index = ohlc_data[stock].index[i]
-        #for index, row in ohlc_data[stock].iterrows(): 
+        
             update_plot_cache(stock, row)
-            #pinfo(row)
             # Check square off conditions
         
             # Construct Json message like Kite
             mydate = "{}-{}-{} {}:{}:{}".format(index.year,index.month,index.day, index.hour, index.minute, index.second)        
+            #msg = {exchange+":"+stock:{"ohlc":{'date':mydate,'open':row['open'],'high':row['high'],'low':row['low'],'close':row['close'],'volume':row['volume']}}, "type":"sim"}
             msg = {exchange+":"+stock:{"ohlc":{'date':mydate,'open':row['open'],'high':row['high'],'low':row['low'],'close':row['close'],'volume':row['volume']}}}
             pdebug1(msg)
             msg = json.dumps(msg)
@@ -293,11 +293,10 @@ def kite_simulator(manager, msg):
             # Call notification_despatcher
             notification_despatcher(None, msg)
             counter = counter + 1
-            # Optional: wait few miliseconds
-            #time.sleep(0.1)
+            
 
     for stock in  data['stock']:
-        conn.set(stock, ohlc_data[stock].to_json(orient='columns'))
+        cache.set(stock, ohlc_data[stock].to_json(orient='columns'))
     
     pinfo('Kite_Simulator: Done: {}'.format(counter))
     notification_despatcher(None, 'done')
@@ -306,7 +305,7 @@ def kite_simulator(manager, msg):
 
     pdebug('Kite_Simulator: Trade Handler Done')
 
-    conn.set('done',1)
+    cache.set('done',1)
     for key in data['stock']:
         pdebug1(key)
         try:
@@ -318,29 +317,28 @@ def kite_simulator(manager, msg):
 
 
 def update_plot_cache(key, tmp_df):
-    cache_buff = pd.read_json(conn.get(key))
-    #tmp_df = ohlc_data.loc[index]
+    cache_buff = pd.read_json(cache.get(key))
     cache_buff = cache_buff.append(tmp_df)
-    conn.set(key, cache_buff.to_json(orient='columns'))
+    cache.set(key, cache_buff.to_json(orient='columns'))
 
 
 def trade_handler(manager, msg):
     pinfo('trade_handler: {}'.format(msg))
 
     # Step 0: Clean queue
-    conn.xtrim('msgBufferQueue',maxlen=0, approximate=False)
-    conn.xtrim('notificationQueue',maxlen=0, approximate=False)
+    cache.xtrim('msgBufferQueue'+cache_postfix,maxlen=0, approximate=False)
+    cache.xtrim('notificationQueue'+cache_postfix,maxlen=0, approximate=False)
 
     simulator_lock.acquire()
      
     counter = 0
     while(True):
         # Step 1: Blocking call to msgBufferQueue and notificationQueue
-        if conn.xlen('msgBufferQueue') == 0:
-            msg_q = conn.xread({'msgBufferQueue':'$','notificationQueue':'$'}, block=0, count=1000)
-        msgs_q = conn.xread({'msgBufferQueue':'0','notificationQueue':'0'}, block=2000, count=1000)
-        conn.xtrim('msgBufferQueue',maxlen=0, approximate=False)
-        conn.xtrim('notificationQueue',maxlen=0, approximate=False)
+        if cache.xlen('msgBufferQueue'+cache_postfix) == 0:
+            msg_q = cache.xread({'msgBufferQueue'+cache_postfix:'$','notificationQueue'+cache_postfix:'$'}, block=0, count=1000)
+        msgs_q = cache.xread({'msgBufferQueue'+cache_postfix:'0','notificationQueue'+cache_postfix:'0'}, block=2000, count=1000)
+        cache.xtrim('msgBufferQueue'+cache_postfix,maxlen=0, approximate=False)
+        cache.xtrim('notificationQueue'+cache_postfix,maxlen=0, approximate=False)
         
         # Step 2: Process notifications: Start a worker thread for each notification
         #TODO
@@ -361,9 +359,9 @@ def trade_handler(manager, msg):
                 stock = key.split(':')[1]
                 exchange = key.split(':')[0]
 
-            hash_key = stock+'_state'
-            freq = conn.hget(hash_key,'freq')
-            state = conn.hget(hash_key,'state')
+            hash_key = stock
+            freq = cache.getValue(hash_key,'freq')
+            state = cache.getValue(hash_key,'state')
 
 
             temp_df = msg_to_ohlc(data)
@@ -377,15 +375,10 @@ def trade_handler(manager, msg):
 
                 ohlc_data = ohlc_data.tail(no_of_hist_candles)
             else: # Load data from OHLC buffer in hash
-                ohlc_data = pd.read_json(conn.hget(hash_key, 'ohlc'))
+                ohlc_data = cache.getOHLC(hash_key)
             
-
-            ohlc_data = ohlc_data.append(temp_df) #Append to ohlc_data
-
-            pdebug1(ohlc_data.tail(1))
-
             # Add to OHLCBuffer in hash
-            conn.hset(hash_key,'ohlc',ohlc_data.to_json())
+            cache.pushOHLC(hash_key,temp_df)
 
             # Start job to process Tick
             manager.add(stock, trade_job, False, hash_key)
@@ -398,31 +391,30 @@ algo_short_so = myalgo
 
 def trade_job(hash_key):
     pdebug1('trade_job: {}'.format(hash_key))
+    pdebug1(trade_lock_store)
     
     # Step 1: Get state for the stock from the redis
-    state = conn.hget(hash_key,'state')
+    state = cache.getValue(hash_key,'state')
     if not state:
         return
-    stock = conn.hget(hash_key,'stock')
-    freq = conn.hget(hash_key,'freq')
-    algo = conn.hget(hash_key,'algo')
+    stock = cache.getValue(hash_key,'stock')
+    freq = cache.getValue(hash_key,'freq')
+    algo = cache.getValue(hash_key,'algo')
     
     trade_lock = trade_lock_store[stock]
     trade_lock.acquire()
 
     pdebug1("{}: {}: {}".format(hash_key, stock, state ))
-    ohlc_df = pd.read_json(conn.hget(hash_key,'ohlc'))
+    ohlc_df = cache.getOHLC(hash_key)
     
     last_processed = ohlc_df.index[-1].strftime('%Y-%m-%d %H:%M')
-    pdebug1("{}=>{}".format(last_processed,conn.hget(hash_key,'last_processed')))
+    pdebug1("{}=>{}".format(last_processed,cache.getValue(hash_key,'last_processed')))
     
-    if last_processed == conn.hget(hash_key,'last_processed'):   
+    if last_processed == cache.getValue(hash_key,'last_processed'):   
         trade_lock.release()
         return
     else:
-        conn.hset(hash_key,'last_processed',last_processed)
-    
-    #print('{}:{}'.format(stock,ohlc_df.index[-1]))
+        cache.setValue(hash_key,'last_processed',last_processed)
     
     # Step 2: Switch to appropriate state machine based on current state
     if state == 'INIT': # State: Init
@@ -430,7 +422,7 @@ def trade_job(hash_key):
             # Done inside thread handler
         
         # 2: Set state to Scanning
-        conn.hset(hash_key,'state','SCANNING')
+        cache.setValue(hash_key,'state','SCANNING')
         pass
     
     elif state == 'SCANNING':  # State: Scanning
@@ -439,29 +431,29 @@ def trade_job(hash_key):
         
         # 2: If Algo returns Buy: set State to 'Pending Order: Long'
         if tradeDecision=="BUY":
-            placeorder("BUY ", ohlc_df, stock, last_processed)
+            placeorder("B: EN: ", ohlc_df, stock, last_processed)
             #logtrade("BUY : {} : {} -> {}".format(last_processed, stock, ohlc_get(ohlc_df,'close')))
-            conn.hset(hash_key,'state','PO:LONG')
+            cache.setValue(hash_key,'state','PO:LONG')
         
         # 3: If Algo returns Sell: set State to 'Pending Order: Short'
         elif tradeDecision=="SELL":
-            placeorder("SELL", ohlc_df, stock, last_processed)
+            placeorder("S: EN: ", ohlc_df, stock, last_processed)
             #logtrade("SELL: {} : {} -> {}".format(last_processed, stock, ohlc_get(ohlc_df,'close')))
-            conn.hset(hash_key,'state','PO:SHORT')
+            cache.setValue(hash_key,'state','PO:SHORT')
         
         # 4: Update TradeMetaData: Push order details to OrderQueue
     
     elif state == 'PO:LONG': # State: Pending Order: Long
     
         # 1: On Fill: set State to Long
-        conn.hset(hash_key,'state','LONG')
+        cache.setValue(hash_key,'state','LONG')
         pass
     
     
     elif state == 'PO:SHORT': # State: Pending Order: Short
     
         # 1: On Fill: set State to Short
-        conn.hset(hash_key,'state','SHORT')
+        cache.setValue(hash_key,'state','SHORT')
         pass
     
     
@@ -472,11 +464,11 @@ def trade_job(hash_key):
         
         tradeDecision = algo_long_so(ohlc_df, algo)
         if tradeDecision == "SELL":
-            placeorder("SO-S", ohlc_df, stock, last_processed)
+            placeorder("S: EX: ", ohlc_df, stock, last_processed)
             #logtrade("SO-S: {} : {} -> {}".format(last_processed, stock, ohlc_get(ohlc_df,'close')))
 
             # 3: If algo returns square off: then push square off details to OrderQueue, set state to 'Awaiting Square Off'   
-            conn.hset(hash_key,'state','SQUAREOFF')
+            cache.setValue(hash_key,'state','SQUAREOFF')
     
     
     elif state == 'SHORT': # State: Short
@@ -486,16 +478,16 @@ def trade_job(hash_key):
         tradeDecision = algo_short_so(ohlc_df, algo)
         
         if tradeDecision == "BUY":
-            placeorder("SO-B", ohlc_df, stock, last_processed)
+            placeorder("B: EX: ", ohlc_df, stock, last_processed)
             #logtrade("SO-B: {} : {} -> {}".format(last_processed, stock, ohlc_get(ohlc_df,'close')))
         
             # 3: If algo returns square off: then push square off details to OrderQueue, set state to 'Awaiting Square Off'
     
-            conn.hset(hash_key,'state','SQUAREOFF')
+            cache.setValue(hash_key,'state','SQUAREOFF')
         
     elif state == 'SQUAREOFF':  # State: Awaiting Square Off
         # 1: On Fill notification: set state to Init
-        conn.hset(hash_key,'state','INIT')
+        cache.setValue(hash_key,'state','INIT')
         pass
    
     trade_lock.release()
@@ -509,9 +501,8 @@ def placeorder(prefix, df, stock, last_processed):
         tmp_df['buy'] = df.iloc[-1:]['close']
     else:
         tmp_df['sell'] = df.iloc[-1:]['close']
-    #df.iloc[-1].index
-    #df.iloc[-1]['close']
-    update_plot_cache(stock+'Trade', tmp_df)
+
+    cache.pushTrade(stock, tmp_df)
 
 
 def order_handler(manager, msg):
@@ -524,25 +515,7 @@ def order_handler(manager, msg):
     # Step 3: If papertrade: create a log entry
     
     # Step 4: If not a papertrade: despatch order
-        
 
-def user_requests_handler(manager, msg): 
-    # {'request':'start|stop|pause|buy|sell|so|status','stock':'TCS', 'qty':10, 'price':1200}
-    pdebug('user_requests_handler: {}'.format(msg))
-    # Step 1: Blocking call to userRequestsQueue
-    msg = conn.xread({'userRequestsQueue':'$'}, block=0, count=100)
-    
-    # Step 2: Process userRequest: Start a worker thread for each request
-    
-    # 2.1: Start Algo Trade: Stock
-    # 2.2: Stop Algo Trade: Stock
-    # 2.3: Pause Algo Trade: Stock
-    # 2.4: Force Buy: Stock
-    # 2.5: Force Sell: Stock
-    # 2.6: Square Off
-    # 2.7: Current Status
-    
-    # Step 3: Put it in the userRequestsQueue
    
 
 # This function implements logic to resume trading post abrupt termination
@@ -556,15 +529,19 @@ def auto_resume_trade(msg):
     # 3: If an open trade in the system is not present in Kite, reset status to init
     
     # 4: For open trades fill OHLC buffer with historical data
-    
+
+cache_backtest = cache_state()
 def freedom_init(manager, msg):
     pdebug('freedom_init: {}'.format(msg))
     # 0: Initialize settings
-    
+    cache.set('done',1)
+
     # 1: Start Freedom threads and processes
-    freedom = threadManager("freedom", ["user_requests_handler", "kite_simulator", "backtest_handler", "trade_handler","order_handler"], 
-                        [user_requests_handler, kite_simulator, backtest_handler, trade_handler, order_handler])
-    
+    #TODO: Implement shared memory and split
+    kite_sim_manager = threadManager("kite_sim_manager", ["kite_simulator","trade_handler"], [kite_simulator, trade_handler])
+    #trade_manager = threadManager("trade_manager", ["trade_handler"], [trade_handler])
+    order_manager = threadManager("order_manager", ["order_handler"], [order_handler])
+
     # 2: Start kite websocket connections
     # Initialise
     #kws = KiteTicker(KiteAPIKey, kite.access_token)

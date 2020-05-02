@@ -12,7 +12,6 @@ app = Flask(__name__)
 dash_app = dash.Dash(__name__, server=app, external_stylesheets=external_stylesheets)
 dash_app.layout = layout_bootstrap
 
-
 cache.set('done',1)
 import pandas as pd
 import json

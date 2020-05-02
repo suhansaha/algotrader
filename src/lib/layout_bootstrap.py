@@ -84,11 +84,17 @@ backtest_tab = dbc.Row([
     dbc.Col([form_div,tabs_bottom])]
 )
 
+trade_tab = dbc.Row([
+    dbc.Col(dcc.Dropdown(id='stock_picker_live', value=['TCS','WIPRO'], multi=True,  className='columns six', options=stock_options), width=8),
+    dbc.Col(html.Div( id='msg_live', style={'font-size':'0.8em','border':'1px solid olivegreen','overflow-y': 'scroll',
+'white-space': 'pre', 'background':'darkslategray','color':'lightgray','padding':'20px','height':'650px'}, children='Welcome to Freedom'), width=4
+)]
+)
+
 tabs_top = dbc.Tabs(
     [
         dbc.Tab(backtest_tab, label="Backtest"),
-        dbc.Tab("PaperTrade", label="Paper Trade"),
-        dbc.Tab("LiveTrade", label="Live Trade"),
+        dbc.Tab(trade_tab, label="Live Trade"),
     ]
 )
 
