@@ -393,18 +393,19 @@ algo_short_so = myalgo
 def trade_job(hash_key):
     pdebug1('trade_job: {}'.format(hash_key))
     
+    stock = cache.getValue(hash_key,'stock')
+
+    trade_lock = trade_lock_store[stock]
+    trade_lock.acquire()
+
     # Step 1: Get state for the stock from the redis
     state = cache.getValue(hash_key,'state')
     if not state:
         return
-    stock = cache.getValue(hash_key,'stock')
     freq = cache.getValue(hash_key,'freq')
     algo = cache.getValue(hash_key,'algo')
-    
-    trade_lock = trade_lock_store[stock]
-    trade_lock.acquire()
 
-    pdebug1("{}: {}: {}".format(hash_key, stock, state ))
+    #pdebug("{}: {}: {}".format(hash_key, stock, state ))
     ohlc_df = cache.getOHLC(hash_key)
     
     last_processed = ohlc_df.index[-1].strftime('%Y-%m-%d %H:%M')
