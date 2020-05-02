@@ -1,5 +1,6 @@
 #setup logging
 import logging
+from redis import Redis
 #logging.basicConfig(filemode='w+')
 #logging.basicConfig(format='%(levelname)s:\t%(message)s', datefmt='%m-%d %H:%M:%S')
 logger = logging.getLogger('freedom')
@@ -8,7 +9,7 @@ logger.setLevel(0)
 # Stream handlers
 c_handler = logging.StreamHandler()
 c_format = logging.Formatter('%(levelname)s:\t%(message)s')
-c_handler.setLevel(logging.ERROR)
+c_handler.setLevel(logging.INFO)
 c_handler.setFormatter(c_format)
 logger.addHandler(c_handler)
 
@@ -46,17 +47,18 @@ perror = lambda x: logger.error(x)
 pexception = lambda x: logger.critical(x)
 pwarning = lambda x: logger.warning(x)
 
-from redis import Redis
-cache = Redis(host='redis', port=6379, db=0, charset="utf-8", decode_responses=True)
+cache_type = "backtest_web"
+redis_conn = Redis(host='redis', port=6379, db=0, charset="utf-8", decode_responses=True)
 def logtrade(x):
     try:
-        msg_bug = cache.get('logMsg')
+        msg_bug = redis_conn.get('logMsg'+cache_type)
         msg_bug = msg_bug + '\n' + x
-        cache.set('logMsg',msg_bug)
+        redis_conn.set('logMsg'+cache_type,msg_bug)
     except:
         pass
     finally:
         loggerT.log(25, x)
+
 
 #logtrade = lambda x: loggerT.log(25, x)
 

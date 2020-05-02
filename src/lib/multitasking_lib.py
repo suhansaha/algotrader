@@ -15,10 +15,10 @@ import json
 import ast
 from datetime import datetime, timedelta
 import time
+
 logger.setLevel(logging.DEBUG)
 #logger.setLevel(1)
 loggerT.setLevel(21)
-
 # The base thread class to enable multithreading
 class myThread (threading.Thread):
     def __init__(self, manager, name, callback, pubsub=True, msg=""):
@@ -44,8 +44,7 @@ class myThread (threading.Thread):
     def thread_pubsub(self, callback):
         pubsub = cache.pubsub()
         pubsub.subscribe([self.name+cache_postfix])
-        
-        pubsub.get_message(self.name+cache_postfix)
+        #pubsub.get_message(self.name+cache_postfix)
 
         for item in pubsub.listen():
             msg = item['data']
@@ -104,7 +103,6 @@ getDeltaT = lambda freq: timedelta(days=no_of_hist_candles) if freq == 'day' els
 def trade_analysis(stock):
     pdebug1("trade_analysis: {}".format(stock))
     trade_log = cache.getTrades(stock)
-
     state = 'None'
     trade_log['profit'] = 0
     profit = 0
@@ -220,7 +218,8 @@ trade_lock_store = {}
 simulator_lock = Lock()
 def trade_init(stock_key, algo, freq, qty, sl, target):        
     # Initialize state
-    
+    pdebug("Trade_init: {}".format(stock_key))
+
     cache.add(stock_key, reset=True)
 
     cache.setValue(stock_key, 'algo', algo)
@@ -242,7 +241,6 @@ def kite_simulator(manager, msg):
     except:
         perror('kite_simulator: Invalid msg: {}'.format(msg))
         return
-    pdebug5(data)
     
     toDate = data['toDate']
     fromDate = data['fromDate']
@@ -260,17 +258,15 @@ def kite_simulator(manager, msg):
 
     ohlc_data = {}
     for stock_key in data['stock']: #Initialize
-        
         # Load data from the Cache
         df = getData(stock_key, startDate, toDate, exchange, freq, False, stock_key)
         ohlc_data[stock_key] = df
-
         trade_init(stock_key, algo, freq, qty, sl, target)
 
     cache.publish('trade_handler'+cache_postfix,'start')
 
     stock = data['stock'][-1] #TODO: Add for loop
-    cache.set('logMsg','Backtest Started: {} :\n'.format(stock)) # Used for displaying trade log
+    cache.set('logMsg'+cache_postfix,'Backtest Started: {} :\n'.format(stock)) # Used for displaying trade log
 
     no = ohlc_data[stock].shape[0]
     counter = 0
@@ -281,7 +277,7 @@ def kite_simulator(manager, msg):
             row = ohlc_data[stock].iloc[i]
             index = ohlc_data[stock].index[i]
         
-            update_plot_cache(stock, row)
+            #update_plot_cache(stock, row)
             # Check square off conditions
         
             # Construct Json message like Kite
@@ -300,6 +296,8 @@ def kite_simulator(manager, msg):
         cache.set(stock, ohlc_data[stock].to_json(orient='columns'))
     
     pinfo('Kite_Simulator: Done: {}'.format(counter))
+
+    time.sleep(1)
     notification_despatcher(None, 'done')
     
     simulator_lock.acquire()
@@ -312,6 +310,7 @@ def kite_simulator(manager, msg):
         try:
             trade_analysis(key)
         except:
+            perror("Exception in trade analysis")
             pass
     
     pdebug('Kite_Simulator: Trade Analysis Done')
@@ -364,7 +363,7 @@ def trade_handler(manager, msg):
             freq = cache.getValue(hash_key,'freq')
             state = cache.getValue(hash_key,'state')
 
-
+            #pdebug('TH: {} =>{}'.format(hash_key, state))
             temp_df = msg_to_ohlc(data)
             if state == 'INIT': # State: Init: Load historical data from cache
                 # 1: Populate Redis buffer stock+"OHLCBuffer" with historical data
@@ -375,15 +374,16 @@ def trade_handler(manager, msg):
                 ohlc_data = getData(stock, fromDate, toDate, exchange, freq, False, stock)
 
                 ohlc_data = ohlc_data.tail(no_of_hist_candles)
-            else: # Load data from OHLC buffer in hash
-                ohlc_data = cache.getOHLC(hash_key)
+                cache.setOHLC(hash_key,ohlc_data)
+
+                #cache.setValue(hash_key,'state','SCANNING')
             
             # Add to OHLCBuffer in hash
             cache.pushOHLC(hash_key,temp_df)
 
             # Start job to process Tick
             manager.add(stock, trade_job, False, hash_key)
-            pdebug1(msg[0])
+            #pdebug(msg[0])
             
 # A thread function to process notifications and tick
 algo_idle = myalgo
@@ -392,7 +392,6 @@ algo_short_so = myalgo
 
 def trade_job(hash_key):
     pdebug1('trade_job: {}'.format(hash_key))
-    pdebug1(trade_lock_store)
     
     # Step 1: Get state for the stock from the redis
     state = cache.getValue(hash_key,'state')
@@ -498,7 +497,7 @@ def placeorder(prefix, df, stock, last_processed):
     logtrade(prefix+" : {} : {} -> {}".format(last_processed, stock, ohlc_get(df,'close')))
 
     tmp_df = pd.DataFrame()
-    if prefix == "BUY " or prefix == "SO-B":
+    if prefix == "B: EN: " or prefix == "B: EX: ":
         tmp_df['buy'] = df.iloc[-1:]['close']
     else:
         tmp_df['sell'] = df.iloc[-1:]['close']
@@ -534,11 +533,11 @@ def auto_resume_trade(msg):
 def freedom_init(manager, msg):
     pdebug('freedom_init: {}'.format(msg))
     # 0: Initialize settings
-    cache.set('done'+cache_postfix,1)
+    cache.set('done'+cache_type,1)
 
     # 1: Start Freedom threads and processes
     #TODO: Implement shared memory and split
-    backtest_manager = threadManager("backtest_web", ["kite_simulator","trade_handler"], [kite_simulator, trade_handler])
+    backtest_manager = threadManager(cache_type, ["kite_simulator","trade_handler"], [kite_simulator, trade_handler])
     #trade_manager = threadManager("trade_manager", ["trade_handler"], [trade_handler])
     order_manager = threadManager("order", ["order_handler"], [order_handler])
 

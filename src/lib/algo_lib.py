@@ -6,8 +6,8 @@ from datetime import timedelta
 from talib import MACD, MACDEXT, RSI, BBANDS, MACD, AROON, STOCHF, ATR, OBV, ADOSC, MINUS_DI, PLUS_DI, ADX, EMA, SMA
 from talib import LINEARREG, BETA, LINEARREG_INTERCEPT, LINEARREG_SLOPE, STDDEV, TSF, ADOSC, VAR, ROC
 from talib import CDLABANDONEDBABY, CDL3BLACKCROWS,CDLDOJI, CDLDOJISTAR, CDLDRAGONFLYDOJI,CDLENGULFING,CDLEVENINGDOJISTAR,CDLEVENINGSTAR, CDLGRAVESTONEDOJI, CDLHAMMER, CDLHANGINGMAN,CDLHARAMI,CDLHARAMICROSS,CDLINVERTEDHAMMER,CDLMARUBOZU,CDLMORNINGDOJISTAR,CDLMORNINGSTAR,CDLSHOOTINGSTAR,CDLSPINNINGTOP,CDL3BLACKCROWS, CDL3LINESTRIKE, CDLKICKING
-from lib.logging_lib import *
-conn = Redis(host='redis', port=6379, db=0, charset="utf-8", decode_responses=True)
+from lib.logging_lib import pdebug, pdebug1, pdebug5, perror, pinfo, redis_conn, cache_type
+
 # ====== Tradescript Wrapper =======
 # Methods
 
@@ -39,6 +39,7 @@ def HAIKINASI(ohlc_data_df):
 ohlc_get = lambda df, key: df.iloc[-1][key]
 REF = lambda df, i: df.iloc[-i-1]
 def myalgo(ohlc_data_df, algo=''): 
+    #pdebug(ohlc_data_df.shape)
     ohlc_data_temp = ohlc_data_df.tail(30)
     
     OPEN = ohlc_data_temp['open']
@@ -50,7 +51,7 @@ def myalgo(ohlc_data_df, algo=''):
     (haOPEN, haHIGH, haLOW, haCLOSE) = HAIKINASI(ohlc_data_temp)
 
     decision = 'WAIT'
-    conn.set('decision',decision)
+    redis_conn.set('decision'+cache_type,decision)
     
     if algo != '':
         postfix = '''\nconn.set('decision',decision)'''
@@ -60,17 +61,14 @@ def myalgo(ohlc_data_df, algo=''):
         except:
             pass
     else:
-        upper, middle, lower = BBANDS(CLOSE)
+        #upper, middle, lower = BBANDS(CLOSE)
 
-        if (REF(LOW,0) < REF(lower,0)) and (REF(haCLOSE,2) < REF(haOPEN,2)) and (REF(haCLOSE,1) < REF(haOPEN,1)) and (REF(haCLOSE,0) > REF(haOPEN,0)): 
+        if (REF(haCLOSE,2) < REF(haOPEN,2)) and (REF(haCLOSE,1) < REF(haOPEN,1)) and (REF(haCLOSE,0) > REF(haOPEN,0)): 
                     decision = "BUY"
-        elif (REF(HIGH,0) > REF(upper,0)) and (REF(haCLOSE,2) > REF(haOPEN,2)) and (REF(haCLOSE,1) > REF(haOPEN,1)) and (REF(haCLOSE,0) < REF(haOPEN,0)): 
+        elif (REF(haCLOSE,2) > REF(haOPEN,2)) and (REF(haCLOSE,1) > REF(haOPEN,1)) and (REF(haCLOSE,0) < REF(haOPEN,0)): 
                     decision = "SELL"
 
-        conn.set('decision',decision)
+        redis_conn.set('decision'+cache_type,decision)
 
-    decision = conn.get('decision')
+    decision = redis_conn.get('decision'+cache_type)
     return decision #"BUY"|"SELL"
-
-#ohlc_df = pd.read_json(conn.hget(stock+'_state','ohlc'))
-#myalgo(ohlc_df)

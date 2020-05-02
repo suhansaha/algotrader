@@ -2,6 +2,7 @@ import plotly
 import plotly.graph_objs as go
 from plotly.subplots import make_subplots
 import plotly.graph_objects as go
+from lib.logging_lib import pdebug, pdebug1, pdebug5, perror, pinfo, cache_type
 from lib.algo_lib import *
 
 scatter = lambda df, key, title, c, fill='none', fillcolor="rgba(0,40,100,0.02)": go.Scatter(x=df.index.astype('str'), y=df[key], name=title, line=dict(color=c),showlegend=False, fill = fill, fillcolor=fillcolor)
@@ -46,16 +47,17 @@ plot_bbb =  lambda fig, df, pos = 1, fill=True, fillcolor="rgba(0,40,100,0.02)":
 
 
 def plot_trade(fig, df, pos=1):
-    fig.append_trace(go.Scatter(x=df.index.astype('str'), y=df['buy']*1.005 ,  mode='markers', marker=dict(color='green'),showlegend=False, hovertext=df['buy']), pos, 1)
-    fig.append_trace(go.Scatter(x=df.index.astype('str'), y=df['sell']*1.005,  mode='markers', marker=dict(color='red'),showlegend=False, hovertext=df['sell']), pos, 1)
+
+    if "buy" in df:
+        fig.append_trace(go.Scatter(x=df.index.astype('str'), y=df['buy']*1.05 ,  mode='markers', marker=dict(color='green'),showlegend=False, hovertext=df['buy']), pos, 1)
+    
+    if "sell" in df:
+        fig.append_trace(go.Scatter(x=df.index.astype('str'), y=df['sell']*1.05,  mode='markers', marker=dict(color='red'),showlegend=False, hovertext=df['sell']), pos, 1)
     return fig
 
 
 
-def render_charts(data, trade, symbol):
-    #temp_data = data
-    #chart = go.Candlestick(x=price.index.astype('str'), open=price['open'], high=price['high'], low=price['low'], close=price['close'], name="Candlestick", showlegend=False)
-    
+def render_charts(data, trade, symbol): 
     fig = make_subplots(rows=3, cols=1, shared_xaxes=True, row_width=[3,1,5], vertical_spacing = 0.01)
     fig['layout']={'xaxis':{'rangeselector': {'buttons': [{'count': 1, 'label': '1h', 'step': 'hour', 'stepmode': 'backward'},
                                             {'count': 3, 'label': '3h', 'step': 'hour', 'stepmode': 'backward'},
@@ -71,17 +73,13 @@ def render_charts(data, trade, symbol):
 
     try:
         price = data
-
         pha = pd.DataFrame()
         pha['open'], pha['high'],pha['low'],pha['close'] = HAIKINASI(price)
 
         price['macd'], price['macdsignal'], price['macdhist'] = MACDEXT(price.close, fastperiod=12, slowperiod=26, signalperiod=9, fastmatype=1, slowmatype=1,signalmatype=1)
         price['rsi'] = RSI(price.close, timeperiod=14)
         price['bbt'], price['bbm'], price['bbb'] = BBANDS(price.close, timeperiod=20, nbdevup=1.6, nbdevdn=1.6, matype=0)
-
-        #price['buy'] = ohlc_data['close'][30:40]
-        #price['sell'] = ohlc_data['close'][50:51]
-            
+     
         #plot_candle(fig, price, 1)
         plot_candle(fig, pha, 1)
         
@@ -89,11 +87,16 @@ def render_charts(data, trade, symbol):
         fig = plot_macd(fig, price, 2)
         fig = plot_rsi(fig, price, 3)
 
-
-        price['buy'] = trade['buy']
-        price['sell'] = trade['sell']
+        #price['buy'] = []
+        #price['sell'] = []
+        if 'buy' in trade:
+            price['buy'] = trade['buy']
+        
+        if 'sell' in trade:
+            price['sell'] = trade['sell']
         fig = plot_trade(fig, price, 1)
     except:
+        perror("Exception in plotting")
         pass
 
     return fig

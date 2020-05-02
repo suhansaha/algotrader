@@ -2,9 +2,8 @@ import pandas as pd
 import numpy as np
 from redis import Redis
 from datetime import datetime
-from lib.logging_lib import *
+from lib.logging_lib import pdebug, pdebug1, pdebug5, perror, pinfo
 
-cache = Redis(host='redis', port=6379, db=0, charset="utf-8", decode_responses=True)
 userid = 'suhan'
 
 # Wrapper for Redis cache
@@ -44,11 +43,18 @@ class cache_state(Redis):
         hash_key = key+self.hash_postfix+'OHLC'
         df = pd.read_json(self.get(hash_key))
         return df
-    
+
+    def setOHLC(self, key, df):
+        hash_key = key+self.hash_postfix+'OHLC'
+        self.set(hash_key, df.to_json(orient='columns'))
+        return df
+
     def pushOHLC(self, key, df):
         hash_key = key+self.hash_postfix+'OHLC'
         cache_buff = pd.read_json(self.get(hash_key))
         cache_buff = cache_buff.append(df)
+        
+        #pinfo("CB: {}=>{}".format(hash_key, cache_buff.shape))
         self.set(hash_key, cache_buff.to_json(orient='columns'))
         
     def getValue(self, key='', field=''):
