@@ -17,6 +17,8 @@ class cache_state(Redis):
     def add(self, key, reset=False):
         hash_key = key+self.hash_postfix
         
+        pinfo(hash_key)
+
         if self.hlen(hash_key) == 0 or reset == True:
             self.hmset(hash_key, {'stock':key, 'qty':0, 'amount':0,'p_n_l':0.0,'Total_p_n_l':0.0,
                                        'low':0.0,'sl':0.0,'ltp':0.0,'tp':0.0,'high':0.0,'last_processed':'1999-01-01',

@@ -85,13 +85,14 @@ def render_charts(data, trade, symbol):
         #plot_candle(fig, price, 1)
         plot_candle(fig, pha, 1)
         
-        price['buy'] = trade['buy']
-        price['sell'] = trade['sell']
-        fig = plot_trade(fig, price, 1)
-        
         fig = plot_bbb(fig, price, 1)
         fig = plot_macd(fig, price, 2)
         fig = plot_rsi(fig, price, 3)
+
+
+        price['buy'] = trade['buy']
+        price['sell'] = trade['sell']
+        fig = plot_trade(fig, price, 1)
     except:
         pass
 

@@ -16,6 +16,7 @@ import ast
 from datetime import datetime, timedelta
 import time
 logger.setLevel(logging.DEBUG)
+#logger.setLevel(1)
 loggerT.setLevel(21)
 
 # The base thread class to enable multithreading
@@ -42,9 +43,9 @@ class myThread (threading.Thread):
     # The thread function for infinite threads which can expect IPC using Redis
     def thread_pubsub(self, callback):
         pubsub = cache.pubsub()
-        pubsub.subscribe([self.name])
+        pubsub.subscribe([self.name+cache_postfix])
         
-        pubsub.get_message(self.name)
+        pubsub.get_message(self.name+cache_postfix)
 
         for item in pubsub.listen():
             msg = item['data']
@@ -266,7 +267,7 @@ def kite_simulator(manager, msg):
 
         trade_init(stock_key, algo, freq, qty, sl, target)
 
-    cache.publish('trade_handler','start')
+    cache.publish('trade_handler'+cache_postfix,'start')
 
     stock = data['stock'][-1] #TODO: Add for loop
     cache.set('logMsg','Backtest Started: {} :\n'.format(stock)) # Used for displaying trade log
@@ -305,7 +306,7 @@ def kite_simulator(manager, msg):
 
     pdebug('Kite_Simulator: Trade Handler Done')
 
-    cache.set('done',1)
+    cache.set('done'+cache_postfix,1)
     for key in data['stock']:
         pdebug1(key)
         try:
@@ -530,17 +531,16 @@ def auto_resume_trade(msg):
     
     # 4: For open trades fill OHLC buffer with historical data
 
-cache_backtest = cache_state()
 def freedom_init(manager, msg):
     pdebug('freedom_init: {}'.format(msg))
     # 0: Initialize settings
-    cache.set('done',1)
+    cache.set('done'+cache_postfix,1)
 
     # 1: Start Freedom threads and processes
     #TODO: Implement shared memory and split
-    kite_sim_manager = threadManager("kite_sim_manager", ["kite_simulator","trade_handler"], [kite_simulator, trade_handler])
+    backtest_manager = threadManager("backtest_web", ["kite_simulator","trade_handler"], [kite_simulator, trade_handler])
     #trade_manager = threadManager("trade_manager", ["trade_handler"], [trade_handler])
-    order_manager = threadManager("order_manager", ["order_handler"], [order_handler])
+    order_manager = threadManager("order", ["order_handler"], [order_handler])
 
     # 2: Start kite websocket connections
     # Initialise
