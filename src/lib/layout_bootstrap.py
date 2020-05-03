@@ -120,7 +120,14 @@ backtest_tab = dbc.Row([
 # Live Trade Tab
 my_cache = cache_state(cache_type)
 df = my_cache.getValue()
-trade_table = df_to_table(df, 'table-editing-simple', True)
+
+try:
+    df = df[['stock', 'qty', 'TP %', 'SL %', 'algo', 'freq', 
+       'amount', 'p_n_l', 'Total_p_n_l', 'low', 'sl', 'ltp', 'tp', 'high', 'state','last_processed']]
+
+    trade_table = df_to_table(df, 'table-editing-simple', True)
+except:
+    trade_table = 'Empty Table'
 
 trade_tab = dbc.Row([
     dbc.Col( 

@@ -235,8 +235,8 @@ def trade_init(stock_key, algo, freq, qty, sl, target):
     cache.setValue(stock_key, 'algo', algo)
     cache.setValue(stock_key, 'freq', freq)
     cache.setValue(stock_key, 'qty', qty)
-    cache.setValue(stock_key, 'sl', sl)
-    cache.setValue(stock_key, 'target', target)
+    cache.setValue(stock_key, 'SL %', sl)
+    cache.setValue(stock_key, 'TP %', target)
 
     cache.set(stock_key, pd.DataFrame().to_json(orient='columns')) #Used for plotting
     
