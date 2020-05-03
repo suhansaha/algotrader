@@ -117,11 +117,13 @@ def update_output(n_intervals, value ):
 
     fig = ''
     trade_summary = 'Ongoing ...'
-    summary_stat = ""
+    summary_stat = redis_conn.hget(stock+cache_type, 'last_processed')
 
     if redis_conn.get('done'+cache_type) == "1":
         fig = freedom_chart(stock) ## to reduce load on processor
         trade_df = pd.read_json( redis_conn.get(stock+cache_type+'Trade') )
+
+        
         try:
             (total_profit, max_loss, max_profit, total_win, total_loss, max_winning_streak, max_loosing_streak, trade_log_df) = trade_analysis_raw(trade_df)
             
