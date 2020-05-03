@@ -290,6 +290,9 @@ def kite_simulator(manager, msg):
             # Call notification_despatcher
             notification_despatcher(None, msg)
             counter = counter + 1
+            if counter % 500 == 0:
+                pinfo('Kite simulator is on a short break')
+                time.sleep(2)
             
 
     for stock in  data['stock']:
@@ -335,8 +338,8 @@ def trade_handler(manager, msg):
     while(True):
         # Step 1: Blocking call to msgBufferQueue and notificationQueue
         if cache.xlen('msgBufferQueue'+cache_postfix) == 0:
-            msg_q = cache.xread({'msgBufferQueue'+cache_postfix:'$','notificationQueue'+cache_postfix:'$'}, block=0, count=1000)
-        msgs_q = cache.xread({'msgBufferQueue'+cache_postfix:'0','notificationQueue'+cache_postfix:'0'}, block=2000, count=1000)
+            msg_q = cache.xread({'msgBufferQueue'+cache_postfix:'$','notificationQueue'+cache_postfix:'$'}, block=0, count=5000)
+        msgs_q = cache.xread({'msgBufferQueue'+cache_postfix:'0','notificationQueue'+cache_postfix:'0'}, block=2000, count=5000)
         cache.xtrim('msgBufferQueue'+cache_postfix,maxlen=0, approximate=False)
         cache.xtrim('notificationQueue'+cache_postfix,maxlen=0, approximate=False)
         
