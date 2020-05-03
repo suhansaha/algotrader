@@ -50,6 +50,7 @@ pwarning = lambda x: logger.warning(x)
 cache_type = "backtest_web"
 redis_conn = Redis(host='redis', port=6379, db=0, charset="utf-8", decode_responses=True)
 def logtrade(x):
+    global cache_type
     try:
         msg_bug = redis_conn.get('logMsg'+cache_type)
         msg_bug = msg_bug + '\n' + x

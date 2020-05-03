@@ -54,11 +54,15 @@ def myalgo(ohlc_data_df, algo=''):
     redis_conn.set('decision'+cache_type,decision)
     
     if algo != '':
-        postfix = '''\nconn.set('decision',decision)'''
+        postfix = "redis_conn.set('decision"+cache_type+"',decision)"
+        
+        code = algo + '\n'+ postfix
+        #pinfo(code)
 
         try:
-            exec(algo+postfix)
+            exec(code)
         except:
+            perror("Error in executing algorithm")
             pass
     else:
         #upper, middle, lower = BBANDS(CLOSE)

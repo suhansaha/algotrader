@@ -2,7 +2,7 @@ import plotly
 import plotly.graph_objs as go
 from plotly.subplots import make_subplots
 import plotly.graph_objects as go
-from lib.logging_lib import pdebug, pdebug1, pdebug5, perror, pinfo, cache_type
+from lib.logging_lib import pdebug, pdebug1, pdebug5, perror, pinfo, cache_type, redis_conn
 from lib.algo_lib import *
 
 scatter = lambda df, key, title, c, fill='none', fillcolor="rgba(0,40,100,0.02)": go.Scatter(x=df.index.astype('str'), y=df[key], name=title, line=dict(color=c),showlegend=False, fill = fill, fillcolor=fillcolor)
@@ -46,13 +46,12 @@ plot_rsi =  lambda fig, df, pos = 1: plot_2_lines_1_bar(fig, df, 'rsi', 'RSI' ,'
 plot_bbb =  lambda fig, df, pos = 1, fill=True, fillcolor="rgba(0,40,100,0.02)": plot_3_lines(fig, df, 'bbt', 'Top' ,'lightgrey', 'bbb','Bottom', 'lightgrey', 'bbm','Middle', 'lightgrey', pos, fill, fillcolor)
 
 
-def plot_trade(fig, df, pos=1):
-
+def plot_trade(fig, df, toffset, pos=1):
     if "buy" in df:
-        fig.append_trace(go.Scatter(x=df.index.astype('str'), y=df['buy']*1.05 ,  mode='markers', marker=dict(color='green'),showlegend=False, hovertext=df['buy']), pos, 1)
+        fig.append_trace(go.Scatter(x=df.index.astype('str'), y=df['buy']*toffset ,  mode='markers', marker=dict(color='green'),showlegend=False, hovertext=df['buy']), pos, 1)
     
     if "sell" in df:
-        fig.append_trace(go.Scatter(x=df.index.astype('str'), y=df['sell']*1.05,  mode='markers', marker=dict(color='red'),showlegend=False, hovertext=df['sell']), pos, 1)
+        fig.append_trace(go.Scatter(x=df.index.astype('str'), y=df['sell']*toffset,  mode='markers', marker=dict(color='red'),showlegend=False, hovertext=df['sell']), pos, 1)
     return fig
 
 
@@ -89,12 +88,17 @@ def render_charts(data, trade, symbol):
 
         #price['buy'] = []
         #price['sell'] = []
+        freq = redis_conn.hget(symbol+cache_type, 'freq')
+        toffset = 1.05
+        if freq == "minute":
+            toffset = 1.005
+
         if 'buy' in trade:
             price['buy'] = trade['buy']
         
         if 'sell' in trade:
             price['sell'] = trade['sell']
-        fig = plot_trade(fig, price, 1)
+        fig = plot_trade(fig, price, toffset, 1)
     except:
         perror("Exception in plotting")
         pass
