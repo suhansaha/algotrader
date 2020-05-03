@@ -417,11 +417,21 @@ def trade_job(hash_key):
         return
     freq = cache.getValue(hash_key,'freq')
     algo_name = cache.getValue(hash_key,'algo')
+    tp = float(cache.getValue(hash_key,'tp'))
+    sl = float(cache.getValue(hash_key,'sl'))
     algo = cache.hget('algos',algo_name)
 
     #pdebug("{}: {}: {}".format(hash_key, stock, state ))
     ohlc_df = cache.getOHLC(hash_key)
-    
+
+    ltp = float(ohlc_df.iloc[-1:]['close'][0])
+    low = float(ohlc_df['low'].tail(30).min())
+    high =  float(ohlc_df['high'].tail(30).max())
+
+    cache.setValue(hash_key, 'ltp', ltp)
+    cache.setValue(hash_key, 'low', low)
+    cache.setValue(hash_key, 'high', high)
+
     last_processed = ohlc_df.index[-1].strftime('%Y-%m-%d %H:%M')
     pdebug1("{}=>{}".format(last_processed,cache.getValue(hash_key,'last_processed')))
     
@@ -474,31 +484,45 @@ def trade_job(hash_key):
     
     elif state == 'LONG': # State: Long
         # 1: If notification for AutoSquare Off: set state to init
-        
-        # 2: Else run trading algorithm for square off
-        
-        tradeDecision = algo_long_so(ohlc_df, algo, state)
-        if tradeDecision == "SELL":
-            placeorder("S: EX: ", ohlc_df, stock, last_processed)
-            #logtrade("SO-S: {} : {} -> {}".format(last_processed, stock, ohlc_get(ohlc_df,'close')))
 
-            # 3: If algo returns square off: then push square off details to OrderQueue, set state to 'Awaiting Square Off'   
+        if ltp < sl:
+            placeorder("S: SL: ", ohlc_df, stock, last_processed)
             cache.setValue(hash_key,'state','SQUAREOFF')
+        elif ltp > tp:
+            placeorder("S: TP: ", ohlc_df, stock, last_processed)
+            cache.setValue(hash_key,'state','SQUAREOFF')
+            pass
+        else:
+            # 2: Else run trading algorithm for square off
+            tradeDecision = algo_long_so(ohlc_df, algo, state)
+            if tradeDecision == "SELL":
+                placeorder("S: EX: ", ohlc_df, stock, last_processed)
+                #logtrade("SO-S: {} : {} -> {}".format(last_processed, stock, ohlc_get(ohlc_df,'close')))
+
+                # 3: If algo returns square off: then push square off details to OrderQueue, set state to 'Awaiting Square Off'   
+                cache.setValue(hash_key,'state','SQUAREOFF')
     
     
     elif state == 'SHORT': # State: Short
         # 1: If notification for AutoSquare Off: set state to init
-        
-        # 2: Else run trading algorithm for square off
-        tradeDecision = algo_short_so(ohlc_df, algo, state)
-        
-        if tradeDecision == "BUY":
-            placeorder("B: EX: ", ohlc_df, stock, last_processed)
-            #logtrade("SO-B: {} : {} -> {}".format(last_processed, stock, ohlc_get(ohlc_df,'close')))
-        
-            # 3: If algo returns square off: then push square off details to OrderQueue, set state to 'Awaiting Square Off'
-    
+        if ltp > sl:
+            placeorder("B: SL: ", ohlc_df, stock, last_processed)
             cache.setValue(hash_key,'state','SQUAREOFF')
+        elif ltp < tp:
+            placeorder("B: TP: ", ohlc_df, stock, last_processed)
+            cache.setValue(hash_key,'state','SQUAREOFF')
+            pass
+        else:
+            # 2: Else run trading algorithm for square off
+            tradeDecision = algo_short_so(ohlc_df, algo, state)
+            
+            if tradeDecision == "BUY":
+                placeorder("B: EX: ", ohlc_df, stock, last_processed)
+                #logtrade("SO-B: {} : {} -> {}".format(last_processed, stock, ohlc_get(ohlc_df,'close')))
+            
+                # 3: If algo returns square off: then push square off details to OrderQueue, set state to 'Awaiting Square Off'
+        
+                cache.setValue(hash_key,'state','SQUAREOFF')
         
     elif state == 'SQUAREOFF':  # State: Awaiting Square Off
         # 1: On Fill notification: set state to Init
@@ -511,11 +535,32 @@ def trade_job(hash_key):
 def placeorder(prefix, df, stock, last_processed):
     logtrade(prefix+" : {} : {} -> {}".format(last_processed, stock, ohlc_get(df,'close')))
 
+    tp_pt = float(cache.getValue(stock,'TP %'))
+    sl_pt = float(cache.getValue(stock,'SL %'))
+    qty = float(cache.getValue(stock,'qty'))
+
+    ltp = df.iloc[-1:]['close']
+    amount = ltp[0] *qty
+    sl = 0
+    tp = 0
+
     tmp_df = pd.DataFrame()
-    if prefix == "B: EN: " or prefix == "B: EX: " or prefix == "B: SO: " or prefix == "B: TP: ":
-        tmp_df['buy'] = df.iloc[-1:]['close']
-    else:
-        tmp_df['sell'] = df.iloc[-1:]['close']
+    if prefix == "B: EN: ":
+        tmp_df['buy'] = ltp
+        sl = ltp[0] * ( 1 - sl_pt / 100 )
+        tp =  ltp[0] * ( 1 + tp_pt / 100 )
+    elif prefix == "B: EX: " or prefix == "B: SL: " or prefix == "B: TP: ":
+        tmp_df['buy'] = ltp
+    elif prefix == "S: EN: ":
+        tmp_df['sell'] = ltp
+        sl = ltp[0] * ( 1 + sl_pt / 100 )
+        tp =  ltp[0] * ( 1 - tp_pt / 100 )
+    elif prefix == "S: EX: " or prefix == "S: SL: " or prefix == "S: TP: ":
+        tmp_df['sell'] = ltp
+
+    cache.setValue(stock,'amount', amount)
+    cache.setValue(stock,'sl', sl)
+    cache.setValue(stock,'tp', tp)
 
     tmp_df['mode'] = prefix
     cache.pushTrade(stock, tmp_df)
