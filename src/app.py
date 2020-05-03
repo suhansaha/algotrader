@@ -88,3 +88,41 @@ def update_output(n_intervals ):
         fig = freedom_chart(stock) ## to reduce load on processor
   
     return fig, logMsg
+
+
+@dash_app.callback(
+    [Output("alert-fade", "is_open"), Output("alert-fade", "children"), Output("alert-fade", "color"),
+     Output("select_algo",'options')],
+    [Input('algo-save', 'n_clicks')], 
+    [State('algo', 'value'), State('algo-name', 'value'), State("alert-fade", "is_open")] )
+def save_algo(n, algo, algo_name, is_open ):
+    #pinfo(algo_name)
+    #pinfo(algo)
+    redis_conn.hset("algos",algo_name, algo)
+
+    alert_is_open = is_open
+    color = "success"
+    msg= "Saved algo "+algo_name
+
+    algo_list = redis_conn.hkeys('algos')
+    algo_list_options = pd.DataFrame({'label':algo_list,'value':algo_list}).to_dict(orient='records')
+    if n:
+        alert_is_open =  not is_open
+
+    try:
+        algo_f = open("log/"+algo_name+".txt", "w")
+        algo_f.write(algo)
+    except:
+        color = "danger"
+        msg= "Failed to Saved algo "+algo_name
+        return
+
+    return alert_is_open, msg, color, algo_list_options
+
+@dash_app.callback(
+    Output("algo", "value"),
+    [Input('select_algo', 'value')] )
+def update_algo(algo_name ):
+
+    algo = redis_conn.hget('algos',algo_name)
+    return algo

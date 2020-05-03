@@ -8,7 +8,7 @@ from dash.dependencies import Input, Output, State
 from datetime import datetime as dt
 from datetime import timedelta
 import dash_editor_components
-
+from lib.logging_lib import redis_conn
 df = pd.read_csv('data/ind_nifty50list.csv')
 
 # Loading OHLC data from local cache
@@ -16,6 +16,9 @@ temp_file = pd.HDFStore("data/kite_cache.h5", mode="r")
 # Loading OHLC data for a stock for initial render
 #data = temp_file.get('/day/NSE/WIPRO').tail(100)['close']
 
+algo_list = redis_conn.hkeys('algos')
+
+algo_list_options = pd.DataFrame({'label':algo_list,'value':algo_list}).to_dict(orient='records')
 
 navbar = dbc.NavbarSimple(
     children=[
@@ -37,7 +40,7 @@ navbar = dbc.NavbarSimple(
     dark=True,
 )
 
-algo_input = html.Div(dbc.FormGroup([dbc.InputGroup([dbc.Input(placeholder="Filename"),dbc.InputGroupAddon(dbc.Button("Save", color="secondary"), addon_type="append")],size="sm"),
+algo_input = html.Div(dbc.FormGroup([dbc.InputGroup([dbc.InputGroupAddon(dcc.Dropdown(id='select_algo', options=algo_list_options, style={"min-width":'200px','height':'10px','font-size':'0.9em'}, value='default', clearable=False),addon_type="prepend"), dbc.Input(id="algo-name",placeholder="Filename",value="default"),dbc.InputGroupAddon(dbc.Button("Save", id="algo-save",color="secondary"), addon_type="append")],size="sm"),
                          #   dbc.Textarea(className="mb-3", style={'height':'500px'}, id='algo', value=""),
                             dash_editor_components.PythonEditor(id='algo', value='')
                         ]), style={'max-width':'700px'})
@@ -102,6 +105,7 @@ tabs_top = dbc.Tabs(
 layout_bootstrap = html.Div(
     [
         dbc.Row(dbc.Col(navbar)),
+        dbc.Alert("Hello! I am an alert", id="alert-fade", dismissable=True,is_open=False,duration=4000),
         dbc.Row(dbc.Col(tabs_top)),
     ]
 )

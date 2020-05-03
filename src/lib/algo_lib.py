@@ -68,9 +68,9 @@ def myalgo(ohlc_data_df, algo=''):
         #upper, middle, lower = BBANDS(CLOSE)
 
         if (REF(haCLOSE,2) < REF(haOPEN,2)) and (REF(haCLOSE,1) < REF(haOPEN,1)) and (REF(haCLOSE,0) > REF(haOPEN,0)): 
-                    decision = "BUY"
+            decision = "BUY"
         elif (REF(haCLOSE,2) > REF(haOPEN,2)) and (REF(haCLOSE,1) > REF(haOPEN,1)) and (REF(haCLOSE,0) < REF(haOPEN,0)): 
-                    decision = "SELL"
+            decision = "SELL"
 
         redis_conn.set('decision'+cache_type,decision)
 
