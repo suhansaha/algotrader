@@ -26,7 +26,9 @@ def df_to_table(df, id, editable=False):
         id=id,
         columns=[{"name": i, "id": i} for i in df.columns],
         data=df.to_dict('records'),
-        editable=editable
+        editable=editable,
+        style_table={'padding-left':'10px','width': '97%'},
+        style_cell = {'text-align':'center'}
     )
     return trade_table
 
@@ -76,28 +78,40 @@ form_div = html.Div([
 
 
 graph_div = dbc.FormGroup([
+        dcc.Dropdown(id='select_chart', options=stock_options),
         dcc.Graph(id='example-graph'),
+        html.Div(id='trade_summary', children='To be loaded...'),
         dcc.Interval( id='graph-update', interval=1000, n_intervals=0, max_intervals=-1, disabled = True)])
 
-trade_summary_div = html.Div(id='trade_summary', children='To be loaded...')
+#trade_summary_div = html.Div(id='trade_summary', children='To be loaded...')
 
 
 log_div = html.Div( id='msg', style={'font-size':'0.8em','border':'1px solid olivegreen','overflow-y': 'scroll',
 'white-space': 'pre', 'background':'darkslategray','color':'lightgray','padding':'20px','height':'350px'}, children='Welcome to Freedom')
 
+#dbc.InputGroupAddon(dcc.Dropdown(id='select_cmd', options={'label':[], 'value':[]}, style={"min-width":'200px','height':'10px','font-size':'0.9em'}, value='default', clearable=False),addon_type="prepend"),
+console_div = html.Div(dbc.FormGroup([dbc.InputGroup([
+        dbc.Input(id="cmd-text",placeholder="Enter command",value="pinfo('Hello World')", debounce=True),
+        dbc.InputGroupAddon(dbc.Button("Go", id="cmd-btn",color="secondary"), addon_type="append")],size="sm"),
+    html.Div( id='console_log', style={'font-size':'0.8em','border':'1px solid olivegreen','overflow-y': 'scroll',
+'white-space': 'pre', 'background':'darkslategray','color':'lightgray','padding':'20px','height':'350px'}, children='Welcome to Freedom')
+                        ]), style={'max-width':'700px'})
+
+    
+
 tabs_bottom = dbc.Tabs(
     [   
-        dbc.Tab(graph_div, label="Trade Charts"),
-        dbc.Tab(trade_summary_div, label="Trade Summary"),
+        dbc.Tab(graph_div, label="Trade Summary"),
+       # dbc.Tab(trade_summary_div, label="Trade Summary"),
         dbc.Tab(log_div, label="Logs"),
-        dbc.Tab("Console", label="Console"),
+        dbc.Tab(console_div, label="Console"),
     ], 
 )
 
 # BackTest
 backtest_tab = dbc.Row([
     dbc.Col(algo_input),
-    dbc.Col([form_div, dbc.Col( dcc.Dropdown(id='select_chart', options=stock_options)),tabs_bottom])]
+    dbc.Col([form_div, tabs_bottom])]
 )
 
 

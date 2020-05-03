@@ -134,45 +134,49 @@ def trade_analysis_raw(trade_log):
     max_winning_streak = 0
     max_loosing_streak = 0
 
-    for index, row in trade_log.iterrows():
-        if not math.isnan(row.buy):
-            profit -= row['buy'] 
-        if not math.isnan(row.sell):
-            profit += row['sell']
+    
+    try:
+        for index, row in trade_log.iterrows():
+            if not math.isnan(row.buy):
+                profit -= row['buy'] 
+            if not math.isnan(row.sell):
+                profit += row['sell']
 
-        if state=='None':
-            trade_log.loc[index,'profit'] = 0
-            state='Trade'
-        else:
-            trade_log.loc[index,'profit'] = profit
-            if profit >=0:
-                total_win += 1
-                if profit > max_profit:
-                    max_profit = profit
-
-                if prev_profit > 0:
-                    winning_streak += 1
-                elif loosing_streak > max_loosing_streak:
-                    max_loosing_streak = loosing_streak
-                loosing_streak = 1    
-
+            if state=='None':
+                trade_log.loc[index,'profit'] = 0
+                state='Trade'
             else:
-                total_loss += 1
-                if profit < max_loss:
-                    max_loss = profit
+                trade_log.loc[index,'profit'] = profit
+                if profit >=0:
+                    total_win += 1
+                    if profit > max_profit:
+                        max_profit = profit
 
-                if prev_profit < 0:
-                    loosing_streak += 1
-                elif winning_streak > max_winning_streak:
-                    max_winning_streak = winning_streak
-                winning_streak = 1
+                    if prev_profit > 0:
+                        winning_streak += 1
+                    elif loosing_streak > max_loosing_streak:
+                        max_loosing_streak = loosing_streak
+                    loosing_streak = 1    
 
-            prev_profit = profit
-            profit = 0
-            state = 'None'
+                else:
+                    total_loss += 1
+                    if profit < max_loss:
+                        max_loss = profit
 
-    total_profit = trade_log.profit.sum()
-    trade_log['CumProfit'] = trade_log.profit.cumsum()
+                    if prev_profit < 0:
+                        loosing_streak += 1
+                    elif winning_streak > max_winning_streak:
+                        max_winning_streak = winning_streak
+                    winning_streak = 1
+
+                prev_profit = profit
+                profit = 0
+                state = 'None'
+
+        total_profit = trade_log.profit.sum()
+        trade_log['CumProfit'] = trade_log.profit.cumsum()
+    except:
+        perror('Something wrong in TradeAnalysis')
 
     return (total_profit, max_loss, max_profit, total_win, total_loss, max_winning_streak, max_loosing_streak, trade_log)
 

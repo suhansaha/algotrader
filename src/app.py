@@ -96,7 +96,14 @@ def update_output(n_intervals, value ):
     stock = value
     pdebug1("In update output: {}".format(stock))
     
-    logMsg = redis_conn.get('logMsg'+cache_type)
+    try:
+        fh = open('log/freedom_trade.log','r')
+        logMsg = fh.read()
+        fh.close()
+        #logMsg = redis_conn.get('logMsg'+cache_type)
+    except:
+        logMsg = "Something went wrong !!"
+
     fig = ''
     trade_summary = 'Ongoing ...'
 
@@ -105,7 +112,11 @@ def update_output(n_intervals, value ):
         trade_df = pd.read_json( redis_conn.get(stock+cache_type+'Trade') )
         try:
             (total_profit, max_loss, max_profit, total_win, total_loss, max_winning_streak, max_loosing_streak, trade_log_df) = trade_analysis_raw(trade_df)
-            trade_summary = df_to_table(trade_log_df, 'trade_summary_table', False)
+            
+            trade_log_df['profit'] = trade_log_df['profit'].map("{:,.02f}".format)
+            trade_log_df['CumProfit'] = trade_log_df['CumProfit'].map("{:,.02f}".format)
+            #trade_log_df = trade_log_df.map("{:,.0f}".format)
+            trade_summary = df_to_table(trade_log_df[['mode','buy','sell','profit','CumProfit']], 'trade_summary_table', False)
         except:
             trade_summary = 'not enough data'
   
@@ -134,9 +145,10 @@ def save_algo(n, algo, algo_name, is_open ):
     try:
         algo_f = open("log/"+algo_name+".txt", "w")
         algo_f.write(algo)
+        algo_f.close()
     except:
         color = "danger"
-        msg= "Failed to Saved algo "+algo_name
+        msg= "Failed to Save algo "+algo_name
         return
 
     return alert_is_open, msg, color, algo_list_options
@@ -148,3 +160,18 @@ def update_algo(algo_name ):
 
     algo = redis_conn.hget('algos',algo_name)
     return algo
+
+@dash_app.callback(
+    Output("console_log", "children"),
+    [Input('cmd-btn', 'n_clicks'), Input('cmd-text', 'n_submit')], [State('cmd-text','value')] )
+def console_cmd(n_clicks, n_submit, cmd ):
+
+    try:
+        exec(cmd)
+        fh = open('log/freedom.log','r')
+        console_log = fh.read()
+        fh.close()
+    except:
+        return "Something went wrong !!"
+    
+    return console_log
