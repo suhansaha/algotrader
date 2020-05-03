@@ -79,6 +79,7 @@ form_div = html.Div([
 
 graph_div = dbc.FormGroup([
         dcc.Dropdown(id='select_chart', options=stock_options),
+        html.Div(id='trade_stat', children='', style={'white-space': 'pre'}),
         dcc.Graph(id='example-graph'),
         html.Div(id='trade_summary', children='To be loaded...'),
         dcc.Interval( id='graph-update', interval=1000, n_intervals=0, max_intervals=-1, disabled = True)])
@@ -87,14 +88,14 @@ graph_div = dbc.FormGroup([
 
 
 log_div = html.Div( id='msg', style={'font-size':'0.8em','border':'1px solid olivegreen','overflow-y': 'scroll',
-'white-space': 'pre', 'background':'darkslategray','color':'lightgray','padding':'20px','height':'350px'}, children='Welcome to Freedom')
+'white-space': 'pre', 'background':'darkslategray','color':'lightgray','padding':'20px','height':'500px'}, children='Welcome to Freedom')
 
 #dbc.InputGroupAddon(dcc.Dropdown(id='select_cmd', options={'label':[], 'value':[]}, style={"min-width":'200px','height':'10px','font-size':'0.9em'}, value='default', clearable=False),addon_type="prepend"),
 console_div = html.Div(dbc.FormGroup([dbc.InputGroup([
         dbc.Input(id="cmd-text",placeholder="Enter command",value="pinfo('Hello World')", debounce=True),
         dbc.InputGroupAddon(dbc.Button("Go", id="cmd-btn",color="secondary"), addon_type="append")],size="sm"),
     html.Div( id='console_log', style={'font-size':'0.8em','border':'1px solid olivegreen','overflow-y': 'scroll',
-'white-space': 'pre', 'background':'darkslategray','color':'lightgray','padding':'20px','height':'350px'}, children='Welcome to Freedom')
+'white-space': 'pre', 'background':'darkslategray','color':'lightgray','padding':'20px','height':'500px'}, children='Welcome to Freedom')
                         ]), style={'max-width':'700px'})
 
     
@@ -120,13 +121,6 @@ backtest_tab = dbc.Row([
 my_cache = cache_state(cache_type)
 df = my_cache.getValue()
 trade_table = df_to_table(df, 'table-editing-simple', True)
-
-#trade_table = dash_table.DataTable(
-#    id='table-editing-simple',
-#    columns=[{"name": i, "id": i} for i in df.columns],
-#    data=df.to_dict('records'),
-#    editable=True
-#)
 
 trade_tab = dbc.Row([
     dbc.Col( 

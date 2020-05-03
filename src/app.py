@@ -89,7 +89,7 @@ def freedom_chart(symbol):
 
 @dash_app.callback(
     [Output('example-graph', 'figure'),
-     Output('msg', 'children'), Output('trade_summary','children')],
+     Output('msg', 'children'), Output('trade_summary','children'), Output('trade_stat','children')],
     [Input('graph-update', 'n_intervals'), Input('select_chart', 'value')])
 def update_output(n_intervals, value ):
     #stock = redis_conn.get('stock')
@@ -106,6 +106,7 @@ def update_output(n_intervals, value ):
 
     fig = ''
     trade_summary = 'Ongoing ...'
+    summary_stat = ""
 
     if redis_conn.get('done'+cache_type) == "1":
         fig = freedom_chart(stock) ## to reduce load on processor
@@ -113,6 +114,10 @@ def update_output(n_intervals, value ):
         try:
             (total_profit, max_loss, max_profit, total_win, total_loss, max_winning_streak, max_loosing_streak, trade_log_df) = trade_analysis_raw(trade_df)
             
+            summary_stat = 'Total Profit: {:.02f}, Max Drawdown: {:.02f}, Max Profit {:.02f}'.format(total_profit, max_loss, max_profit)
+            #summary_stat = summary_stat + html.Br()
+            summary_stat = summary_stat + '\n Win: {}, Loss: {}, Longest Streak => Win: {}, Loss: {}'.format(total_win, total_loss, max_winning_streak, max_loosing_streak)
+
             trade_log_df['profit'] = trade_log_df['profit'].map("{:,.02f}".format)
             trade_log_df['CumProfit'] = trade_log_df['CumProfit'].map("{:,.02f}".format)
             #trade_log_df = trade_log_df.map("{:,.0f}".format)
@@ -120,7 +125,7 @@ def update_output(n_intervals, value ):
         except:
             trade_summary = 'not enough data'
   
-    return fig, logMsg, trade_summary
+    return fig, logMsg, trade_summary, summary_stat
 
 
 @dash_app.callback(
