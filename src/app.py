@@ -5,6 +5,7 @@ from flask import Flask, render_template, request
 from collections import deque
 from lib.logging_lib import pdebug, pdebug1, pdebug5, perror, pinfo, redis_conn, cache_type
 from lib.charting_lib import *
+from lib.multitasking_lib import trade_analysis_raw
 
 app = Flask(__name__)
 
@@ -88,7 +89,7 @@ def freedom_chart(symbol):
 
 @dash_app.callback(
     [Output('example-graph', 'figure'),
-     Output('msg', 'children')],
+     Output('msg', 'children'), Output('trade_summary','children')],
     [Input('graph-update', 'n_intervals'), Input('select_chart', 'value')])
 def update_output(n_intervals, value ):
     #stock = redis_conn.get('stock')
@@ -97,11 +98,18 @@ def update_output(n_intervals, value ):
     
     logMsg = redis_conn.get('logMsg'+cache_type)
     fig = ''
+    trade_summary = 'Ongoing ...'
 
     if redis_conn.get('done'+cache_type) == "1":
         fig = freedom_chart(stock) ## to reduce load on processor
+        trade_df = pd.read_json( redis_conn.get(stock+cache_type+'Trade') )
+        try:
+            (total_profit, max_loss, max_profit, total_win, total_loss, max_winning_streak, max_loosing_streak, trade_log_df) = trade_analysis_raw(trade_df)
+            trade_summary = df_to_table(trade_log_df, 'trade_summary_table', False)
+        except:
+            trade_summary = 'not enough data'
   
-    return fig, logMsg
+    return fig, logMsg, trade_summary
 
 
 @dash_app.callback(

@@ -103,6 +103,22 @@ getDeltaT = lambda freq: timedelta(days=no_of_hist_candles) if freq == 'day' els
 def trade_analysis(stock):
     pdebug1("trade_analysis: {}".format(stock))
     trade_log = cache.getTrades(stock)
+    (total_profit, max_loss, max_profit, total_win, total_loss, max_winning_streak, max_loosing_streak, trade_log_df) = trade_analysis_raw(trade_log)
+
+    logtrade('''
+ ====================================================
+ *** Trade Analysis for : {}
+ ----------------------------------------------------
+  Total Profit: {:.2f}
+  Max Loss: {:.2f}, Max Win: {:.2f}
+  # of Win: {}, # of Loss: {}
+  Longest Winning Streak: {}, Longest Loosing Streak: {}
+ ----------------------------------------------------
+ {}
+ ===================================================='''.format(stock, total_profit, max_loss, max_profit, total_win, total_loss, max_winning_streak, max_loosing_streak, trade_log_df.fillna(''))  )
+
+
+def trade_analysis_raw(trade_log):
     state = 'None'
     trade_log['profit'] = 0
     profit = 0
@@ -158,17 +174,7 @@ def trade_analysis(stock):
     total_profit = trade_log.profit.sum()
     trade_log['CumProfit'] = trade_log.profit.cumsum()
 
-    logtrade('''
- ====================================================
- *** Trade Analysis for : {}
- ----------------------------------------------------
-  Total Profit: {:.2f}
-  Max Loss: {:.2f}, Max Win: {:.2f}
-  # of Win: {}, # of Loss: {}
-  Longest Winning Streak: {}, Longest Loosing Streak: {}
- ----------------------------------------------------
- {}
- ===================================================='''.format(stock, total_profit, max_loss, max_profit, total_win, total_loss, max_winning_streak, max_loosing_streak, trade_log.fillna(''))  )
+    return (total_profit, max_loss, max_profit, total_win, total_loss, max_winning_streak, max_loosing_streak, trade_log)
 
 
 def msg_to_ohlc(data):
@@ -501,11 +507,12 @@ def placeorder(prefix, df, stock, last_processed):
     logtrade(prefix+" : {} : {} -> {}".format(last_processed, stock, ohlc_get(df,'close')))
 
     tmp_df = pd.DataFrame()
-    if prefix == "B: EN: " or prefix == "B: EX: ":
+    if prefix == "B: EN: " or prefix == "B: EX: " or prefix == "B: SO: " or prefix == "B: TP: ":
         tmp_df['buy'] = df.iloc[-1:]['close']
     else:
         tmp_df['sell'] = df.iloc[-1:]['close']
 
+    tmp_df['mode'] = prefix
     cache.pushTrade(stock, tmp_df)
 
 

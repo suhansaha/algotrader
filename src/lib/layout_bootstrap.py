@@ -8,17 +8,27 @@ from dash.dependencies import Input, Output, State
 from datetime import datetime as dt
 from datetime import timedelta
 import dash_editor_components
-from lib.logging_lib import redis_conn
+from lib.logging_lib import redis_conn, cache_type
 df = pd.read_csv('data/ind_nifty50list.csv')
+import dash_table
+from lib.data_model_lib import *
 
 # Loading OHLC data from local cache
 temp_file = pd.HDFStore("data/kite_cache.h5", mode="r")
-# Loading OHLC data for a stock for initial render
-#data = temp_file.get('/day/NSE/WIPRO').tail(100)['close']
 
+# List of algos from the cache
 algo_list = redis_conn.hkeys('algos')
-
 algo_list_options = pd.DataFrame({'label':algo_list,'value':algo_list}).to_dict(orient='records')
+
+# Helper Functions
+def df_to_table(df, id, editable=False):
+    trade_table = dash_table.DataTable(
+        id=id,
+        columns=[{"name": i, "id": i} for i in df.columns],
+        data=df.to_dict('records'),
+        editable=editable
+    )
+    return trade_table
 
 navbar = dbc.NavbarSimple(
     children=[
@@ -40,26 +50,17 @@ navbar = dbc.NavbarSimple(
     dark=True,
 )
 
+# Left pane for writing algo
 algo_input = html.Div(dbc.FormGroup([dbc.InputGroup([dbc.InputGroupAddon(dcc.Dropdown(id='select_algo', options=algo_list_options, style={"min-width":'200px','height':'10px','font-size':'0.9em'}, value='default', clearable=False),addon_type="prepend"), dbc.Input(id="algo-name",placeholder="Filename",value="default"),dbc.InputGroupAddon(dbc.Button("Save", id="algo-save",color="secondary"), addon_type="append")],size="sm"),
                          #   dbc.Textarea(className="mb-3", style={'height':'500px'}, id='algo', value=""),
                             dash_editor_components.PythonEditor(id='algo', value='')
                         ]), style={'max-width':'700px'})
 
-log_div = html.Div( id='msg', style={'font-size':'0.8em','border':'1px solid olivegreen','overflow-y': 'scroll',
-'white-space': 'pre', 'background':'darkslategray','color':'lightgray','padding':'20px','height':'350px'}, children='Welcome to Freedom')
-
-
-
-
+# The form to enter backtest details
 cal_end_date = temp_file.get('/minute/NSE/WIPRO').index[-1].strftime("%Y-%m-%d")
 cal_start_date = (temp_file.get('/minute/NSE/WIPRO').index[-1] - timedelta(days=10)).strftime("%Y-%m-%d")
 freq_options = [{'label':'day', 'value':'day'},{'label':'1min', 'value':'1min'},{'label':'5min', 'value':'5min','disabled':True},{'label':'10min', 'value':'10min','disabled':True},{'label':'15min', 'value':'15min','disabled':True}]
 stock_options = pd.DataFrame({'label':df['Symbol'],'value':df['Symbol']}).to_dict(orient='records')
-
-graph_div = dbc.FormGroup([
-        dcc.Dropdown(id='select_chart', options=stock_options),
-        dcc.Graph(id='example-graph'),
-        dcc.Interval( id='graph-update', interval=1000, n_intervals=0, max_intervals=-1, disabled = True)])
 
 form_div = html.Div([
             dcc.Dropdown(id='yaxis-column', value=['TCS','WIPRO'], multi=True,  className='columns six', options=stock_options),
@@ -73,27 +74,58 @@ form_div = html.Div([
             ], no_gutters=True),
         ])
 
+
+graph_div = dbc.FormGroup([
+        dcc.Graph(id='example-graph'),
+        dcc.Interval( id='graph-update', interval=1000, n_intervals=0, max_intervals=-1, disabled = True)])
+
+trade_summary_div = html.Div(id='trade_summary', children='To be loaded...')
+
+
+log_div = html.Div( id='msg', style={'font-size':'0.8em','border':'1px solid olivegreen','overflow-y': 'scroll',
+'white-space': 'pre', 'background':'darkslategray','color':'lightgray','padding':'20px','height':'350px'}, children='Welcome to Freedom')
+
 tabs_bottom = dbc.Tabs(
-    [
+    [   
         dbc.Tab(graph_div, label="Trade Charts"),
-        dbc.Tab("Trade Summary: collapse", label="Trade Summary"),
+        dbc.Tab(trade_summary_div, label="Trade Summary"),
         dbc.Tab(log_div, label="Logs"),
         dbc.Tab("Console", label="Console"),
     ], 
 )
 
+# BackTest
 backtest_tab = dbc.Row([
     dbc.Col(algo_input),
-    dbc.Col([form_div,tabs_bottom])]
+    dbc.Col([form_div, dbc.Col( dcc.Dropdown(id='select_chart', options=stock_options)),tabs_bottom])]
 )
 
+
+
+# Live Trade Tab
+my_cache = cache_state(cache_type)
+df = my_cache.getValue()
+trade_table = df_to_table(df, 'table-editing-simple', True)
+
+#trade_table = dash_table.DataTable(
+#    id='table-editing-simple',
+#    columns=[{"name": i, "id": i} for i in df.columns],
+#    data=df.to_dict('records'),
+#    editable=True
+#)
+
 trade_tab = dbc.Row([
-    dbc.Col(dcc.Dropdown(id='stock_picker_live', value=['TCS','WIPRO'], multi=True,  className='columns six', options=stock_options), width=8),
+    dbc.Col( 
+        [dbc.Row(dbc.Col(dcc.Dropdown(id='stock_picker_live', value=['TCS','WIPRO'], multi=True,  className='columns six', options=stock_options))),
+         dbc.Row(dbc.Col(trade_table))
+        ]
+    , width=8),
     dbc.Col(html.Div( id='msg_live', style={'font-size':'0.8em','border':'1px solid olivegreen','overflow-y': 'scroll',
 'white-space': 'pre', 'background':'darkslategray','color':'lightgray','padding':'20px','height':'650px'}, children='Welcome to Freedom'), width=4
 )]
 )
 
+##### Layout of Page ##########
 tabs_top = dbc.Tabs(
     [
         dbc.Tab(backtest_tab, label="Backtest"),
