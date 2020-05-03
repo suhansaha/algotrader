@@ -133,8 +133,9 @@ def update_output(n_intervals, value ):
 
             trade_log_df['profit'] = trade_log_df['profit'].map("{:,.02f}".format)
             trade_log_df['CumProfit'] = trade_log_df['CumProfit'].map("{:,.02f}".format)
+            trade_log_df['date'] = trade_log_df.index
             #trade_log_df = trade_log_df.map("{:,.0f}".format)
-            trade_summary = df_to_table(trade_log_df[['mode','buy','sell','profit','CumProfit']], 'trade_summary_table', False)
+            trade_summary = df_to_table(trade_log_df[['date','mode','buy','sell','profit','CumProfit']], 'trade_summary_table', False)
         except:
             trade_summary = 'not enough data'
   
