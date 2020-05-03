@@ -14,6 +14,12 @@ dash_app.layout = layout_bootstrap
 
 redis_conn.set('done'+cache_type,1)
 
+def store_algo(algo, algo_name="default"):
+    redis_conn.hset("algos",algo_name, algo)
+    algo_f = open("log/"+algo_name+".txt", "w")
+    algo_f.write(algo)
+    algo_f.close()
+
 import pandas as pd
 import json
 @dash_app.callback(
@@ -24,8 +30,8 @@ import json
     State('input-sl', 'value'),
     State('input-target', 'value'),
     State('date-picker-range', 'start_date'), State('date-picker-range', 'end_date'),
-    State('algo','value'), State('freq','value')])
-def start_backtest(n_clicks, stocks, qty, sl, target, start_date, end_date, algo, freq ):
+    State('algo','value'), State('freq','value'), State('algo-name', 'value')])
+def start_backtest(n_clicks, stocks, qty, sl, target, start_date, end_date, algo, freq, algo_name ):
     toDate = end_date
     fromDate = start_date
     
@@ -34,7 +40,12 @@ def start_backtest(n_clicks, stocks, qty, sl, target, start_date, end_date, algo
 
     pdebug1(stocks)
     # Step 1: Create the msg for initiating backtest
-    backtest_msg={'stock':stocks,'sl':sl,'target':target,'qty':qty,'algo':algo,'fromDate':fromDate,'toDate':toDate,'freq':freq}
+    backtest_msg={'stock':stocks,'sl':sl,'target':target,'qty':qty,'algo':algo_name,'fromDate':fromDate,'toDate':toDate,'freq':freq}
+
+    try:
+        store_algo(algo, algo_name)
+    except:
+        perror('Something went wrong while saving algo')
 
     pdebug1(backtest_msg)
     # Step 2: Store the stock name under backtest in the redis cache
@@ -127,7 +138,6 @@ def update_output(n_intervals, value ):
   
     return fig, logMsg, trade_summary, summary_stat
 
-
 @dash_app.callback(
     [Output("alert-fade", "is_open"), Output("alert-fade", "children"), Output("alert-fade", "color"),
      Output("select_algo",'options')],
@@ -136,35 +146,31 @@ def update_output(n_intervals, value ):
 def save_algo(n, algo, algo_name, is_open ):
     #pinfo(algo_name)
     #pinfo(algo)
-    redis_conn.hset("algos",algo_name, algo)
-
     alert_is_open = is_open
     color = "success"
     msg= "Saved algo "+algo_name
+
+    try:
+        store_algo(algo, algo_name)
+    except:
+        color = "danger"
+        msg= "Failed to Save algo "+algo_name
+        return
 
     algo_list = redis_conn.hkeys('algos')
     algo_list_options = pd.DataFrame({'label':algo_list,'value':algo_list}).to_dict(orient='records')
     if n:
         alert_is_open =  not is_open
 
-    try:
-        algo_f = open("log/"+algo_name+".txt", "w")
-        algo_f.write(algo)
-        algo_f.close()
-    except:
-        color = "danger"
-        msg= "Failed to Save algo "+algo_name
-        return
-
     return alert_is_open, msg, color, algo_list_options
 
 @dash_app.callback(
-    Output("algo", "value"),
+    [Output("algo", "value"), Output('algo-name', 'value')],
     [Input('select_algo', 'value')] )
 def update_algo(algo_name ):
 
     algo = redis_conn.hget('algos',algo_name)
-    return algo
+    return algo, algo_name
 
 @dash_app.callback(
     Output("console_log", "children"),

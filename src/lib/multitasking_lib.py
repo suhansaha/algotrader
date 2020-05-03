@@ -416,7 +416,8 @@ def trade_job(hash_key):
     if not state:
         return
     freq = cache.getValue(hash_key,'freq')
-    algo = cache.getValue(hash_key,'algo')
+    algo_name = cache.getValue(hash_key,'algo')
+    algo = cache.hget('algos',algo_name)
 
     #pdebug("{}: {}: {}".format(hash_key, stock, state ))
     ohlc_df = cache.getOHLC(hash_key)
@@ -441,7 +442,7 @@ def trade_job(hash_key):
     
     elif state == 'SCANNING':  # State: Scanning
         # 1: Run trading algorithm for entering trade
-        tradeDecision = algo_idle(ohlc_df, algo)
+        tradeDecision = algo_idle(ohlc_df, algo, state)
         
         # 2: If Algo returns Buy: set State to 'Pending Order: Long'
         if tradeDecision=="BUY":
@@ -476,7 +477,7 @@ def trade_job(hash_key):
         
         # 2: Else run trading algorithm for square off
         
-        tradeDecision = algo_long_so(ohlc_df, algo)
+        tradeDecision = algo_long_so(ohlc_df, algo, state)
         if tradeDecision == "SELL":
             placeorder("S: EX: ", ohlc_df, stock, last_processed)
             #logtrade("SO-S: {} : {} -> {}".format(last_processed, stock, ohlc_get(ohlc_df,'close')))
@@ -489,7 +490,7 @@ def trade_job(hash_key):
         # 1: If notification for AutoSquare Off: set state to init
         
         # 2: Else run trading algorithm for square off
-        tradeDecision = algo_short_so(ohlc_df, algo)
+        tradeDecision = algo_short_so(ohlc_df, algo, state)
         
         if tradeDecision == "BUY":
             placeorder("B: EX: ", ohlc_df, stock, last_processed)

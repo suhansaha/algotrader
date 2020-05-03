@@ -38,7 +38,7 @@ def HAIKINASI(ohlc_data_df):
 
 ohlc_get = lambda df, key: df.iloc[-1][key]
 REF = lambda df, i: df.iloc[-i-1]
-def myalgo(ohlc_data_df, algo=''): 
+def myalgo(ohlc_data_df, algo='', state='SCANNING'): 
     #pdebug(ohlc_data_df.shape)
     ohlc_data_temp = ohlc_data_df.tail(30)
     

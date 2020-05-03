@@ -88,14 +88,14 @@ graph_div = dbc.FormGroup([
 
 
 log_div = html.Div( id='msg', style={'font-size':'0.8em','border':'1px solid olivegreen','overflow-y': 'scroll',
-'white-space': 'pre', 'background':'darkslategray','color':'lightgray','padding':'20px','height':'500px'}, children='Welcome to Freedom')
+'white-space': 'pre', 'background':'darkslategray','color':'lightgray','padding':'20px','height':'480px'}, children='Welcome to Freedom')
 
 #dbc.InputGroupAddon(dcc.Dropdown(id='select_cmd', options={'label':[], 'value':[]}, style={"min-width":'200px','height':'10px','font-size':'0.9em'}, value='default', clearable=False),addon_type="prepend"),
 console_div = html.Div(dbc.FormGroup([dbc.InputGroup([
         dbc.Input(id="cmd-text",placeholder="Enter command",value="pinfo('Hello World')", debounce=True),
         dbc.InputGroupAddon(dbc.Button("Go", id="cmd-btn",color="secondary"), addon_type="append")],size="sm"),
     html.Div( id='console_log', style={'font-size':'0.8em','border':'1px solid olivegreen','overflow-y': 'scroll',
-'white-space': 'pre', 'background':'darkslategray','color':'lightgray','padding':'20px','height':'500px'}, children='Welcome to Freedom')
+'white-space': 'pre', 'background':'darkslategray','color':'lightgray','padding':'20px','height':'480px'}, children='Welcome to Freedom')
                         ]), style={'max-width':'700px'})
 
     
