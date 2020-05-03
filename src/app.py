@@ -72,6 +72,15 @@ def update_select_chart(values ):
     return stock_select_options, values[0]
 
 def freedom_chart(symbol):
+    #key = symbol+cache_type+'OHLC'
+    #key = symbol
+    if not redis_conn.exists(symbol):
+        return ""
+    #    ohlc_df = pd.read_json(cache_raw)
+    #    ohlc_df.index.rename('date', inplace=True)
+    #    trade_df = pd.read_json(redis_conn.get(symbol+cache_type+'Trade'), orient='columns')
+    #    return render_charts(ohlc_df, trade_df, symbol)
+
     ohlc_df = pd.read_json(redis_conn.get(symbol), orient='columns')
     ohlc_df.index.rename('date', inplace=True)
     trade_df = pd.read_json(redis_conn.get(symbol+cache_type+'Trade'), orient='columns')
@@ -90,8 +99,6 @@ def update_output(n_intervals, value ):
     fig = ''
 
     if redis_conn.get('done'+cache_type) == "1":
-    #if n_intervals % 10 == 0:
-        #pinfo(n_intervals)
         fig = freedom_chart(stock) ## to reduce load on processor
   
     return fig, logMsg
