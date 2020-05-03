@@ -64,6 +64,12 @@ def update_intervals(n_intervals, clicks):
         pdebug1("Returning False: Enable Interval")
         return False, True, 'Wait'
 
+@dash_app.callback(
+    [Output('select_chart', 'options'),Output('select_chart', 'value')],
+    [Input('yaxis-column', 'value')])
+def update_select_chart(values ):
+    stock_select_options = pd.DataFrame({'label':values,'value':values}).to_dict(orient='records')
+    return stock_select_options, values[0]
 
 def freedom_chart(symbol):
     ohlc_df = pd.read_json(redis_conn.get(symbol), orient='columns')
@@ -74,9 +80,10 @@ def freedom_chart(symbol):
 @dash_app.callback(
     [Output('example-graph', 'figure'),
      Output('msg', 'children')],
-    [Input('graph-update', 'n_intervals')])
-def update_output(n_intervals ):
-    stock = redis_conn.get('stock')
+    [Input('graph-update', 'n_intervals'), Input('select_chart', 'value')])
+def update_output(n_intervals, value ):
+    #stock = redis_conn.get('stock')
+    stock = value
     pdebug1("In update output: {}".format(stock))
     
     logMsg = redis_conn.get('logMsg'+cache_type)
