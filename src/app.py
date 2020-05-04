@@ -83,21 +83,6 @@ def update_select_chart(values ):
     stock_select_options = pd.DataFrame({'label':values,'value':values}).to_dict(orient='records')
     return stock_select_options, values[0]
 
-def freedom_chart(symbol):
-    #key = symbol+cache_type+'OHLC'
-    #key = symbol
-    if not redis_conn.exists(symbol):
-        return ""
-    #    ohlc_df = pd.read_json(cache_raw)
-    #    ohlc_df.index.rename('date', inplace=True)
-    #    trade_df = pd.read_json(redis_conn.get(symbol+cache_type+'Trade'), orient='columns')
-    #    return render_charts(ohlc_df, trade_df, symbol)
-
-    ohlc_df = pd.read_json(redis_conn.get(symbol), orient='columns')
-    ohlc_df.index.rename('date', inplace=True)
-    trade_df = pd.read_json(redis_conn.get(symbol+cache_type+'Trade'), orient='columns')
-    return render_charts(ohlc_df, trade_df, symbol)
-
 @dash_app.callback(
     [Output('example-graph', 'figure'),
      Output('msg', 'children'), Output('trade_summary','children'), Output('trade_stat','children')],
@@ -189,3 +174,60 @@ def console_cmd(n_clicks, n_submit, cmd ):
         return "Something went wrong !!"
     
     return console_log
+
+#@dash_app.callback(
+#    Output('table-editing-simple', 'data'),
+#    [Input('stock_picker_live', 'value')])
+#def update_live_table(value ):
+#    live_cache = cache_state('live')
+#    for stock in value:
+#        pinfo(stock)
+        #live_cache.add(stock)
+#        return df_to_table(live_cache.getValue(), 'table-editing-simple', True)
+
+@dash_app.callback(
+    [Output('table-editing-simple', 'data'),
+    Output('table-editing-simple', 'columns')],
+    [Input('stock_picker_live', 'value'), Input('table-editing-simple', 'data_timestamp')],
+    [State('table-editing-simple', 'data'),
+     State('table-editing-simple', 'columns')])
+def add_row(value, ts, rows, columns):
+    live_cache = cache_state('live')
+    df_updates = pd.DataFrame.from_dict(rows)
+    df_cache = live_cache.getValue()
+    
+
+    if df_updates.shape[0] > 0 and df_cache.shape[0] > 0:
+        for stock in df_cache[df_cache['stock'].isin(df_updates['stock']) == False]['stock']:
+            live_cache.remove(stock)
+            pinfo("Removed stock: {}".format(stock))
+
+        for index, row in  df_updates.iterrows():
+            live_cache.setValue(row['stock'], 'qty', row['qty'])
+            live_cache.setValue(row['stock'], 'TP %', row['TP %'])
+            live_cache.setValue(row['stock'], 'SL %', row['SL %'])
+            live_cache.setValue(row['stock'], 'algo', row['algo'])
+            live_cache.setValue(row['stock'], 'freq', row['freq'])
+    else:
+        live_cache.remove()
+        
+    try:
+        for stock in value:
+            live_cache.add(stock)
+            pinfo("Added stock: {}".format(stock))
+    except:
+        pass
+
+
+    df = live_cache.getValue()
+
+
+    #TODO: Send message to live_trade_handler
+
+    if df.shape[0] > 0:
+        df = df[['stock', 'qty', 'TP %', 'SL %', 'algo', 'freq', 
+        'amount', 'p_n_l', 'Total_p_n_l', 'low', 'sl', 'ltp', 'tp', 'high', 'mode','state','last_processed']]
+            
+        return df.to_dict('records'), [{"name": i, "id": i} for i in df.columns]
+    else:
+        return [],[{}]

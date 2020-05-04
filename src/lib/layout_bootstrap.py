@@ -21,12 +21,13 @@ algo_list = redis_conn.hkeys('algos')
 algo_list_options = pd.DataFrame({'label':algo_list,'value':algo_list}).to_dict(orient='records')
 
 # Helper Functions
-def df_to_table(df, id, editable=False):
+def df_to_table(df, id, editable=False, row_deletable=False):
     trade_table = dash_table.DataTable(
         id=id,
         columns=[{"name": i, "id": i} for i in df.columns],
         data=df.to_dict('records'),
         editable=editable,
+        row_deletable = row_deletable,
         style_table={'padding-left':'10px','width': '97%'},
         style_cell = {'text-align':'center'}
     )
@@ -118,21 +119,26 @@ backtest_tab = dbc.Row([
 
 
 # Live Trade Tab
-my_cache = cache_state(cache_type)
-df = my_cache.getValue()
+#my_cache = cache_state(cache_type)
+live_cache = cache_state('live')
+df = live_cache.getValue()
 
 try:
     df = df[['stock', 'qty', 'TP %', 'SL %', 'algo', 'freq', 
        'amount', 'p_n_l', 'Total_p_n_l', 'low', 'sl', 'ltp', 'tp', 'high', 'state','last_processed']]
-
-    trade_table = df_to_table(df, 'table-editing-simple', True)
 except:
-    trade_table = 'Empty Table'
+    df = pd.DataFrame(columns=['stock', 'qty', 'TP %', 'SL %', 'algo', 'freq', 
+       'amount', 'p_n_l', 'Total_p_n_l', 'low', 'sl', 'ltp', 'tp', 'high', 'state','last_processed'])
+
+if df.shape[0] > 0:
+    trade_table = df_to_table(df, 'table-editing-simple', True, True)
+else:
+    trade_table = dash_table.DataTable(id='table-editing-simple', editable=True, row_deletable=True)
 
 trade_tab = dbc.Row([
     dbc.Col( 
-        [dbc.Row(dbc.Col(dcc.Dropdown(id='stock_picker_live', value=['TCS','WIPRO'], multi=True,  className='columns six', options=stock_options))),
-         dbc.Row(dbc.Col(trade_table))
+        [dbc.Row(dbc.Col(dcc.Dropdown(id='stock_picker_live', multi=True,  className='columns six', options=stock_options))),
+         dbc.Row(dbc.Col(trade_table, style={'padding-left':'20px'}))
         ]
     , width=8),
     dbc.Col(html.Div( id='msg_live', style={'font-size':'0.8em','border':'1px solid olivegreen','overflow-y': 'scroll',

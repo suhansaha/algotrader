@@ -591,25 +591,47 @@ def auto_resume_trade(msg):
     
     # 4: For open trades fill OHLC buffer with historical data
 
+backtest_manager = ""
+order_manager = ""
+live_trade_manager = ""
 def freedom_init(manager, msg):
+    global backtest_manager, order_manager, live_trade_manager
     pdebug('freedom_init: {}'.format(msg))
+    job_alive = lambda x: pinfo("backtest_manager: {}".format(x.job.is_alive()))
     # 0: Initialize settings
-    cache.set('done'+cache_type,1)
 
-    # 1: Start Freedom threads and processes
-    #TODO: Implement shared memory and split
-    backtest_manager = threadManager(cache_type, ["kite_simulator","trade_handler"], [kite_simulator, trade_handler])
-    #trade_manager = threadManager("trade_manager", ["trade_handler"], [trade_handler])
-    order_manager = threadManager("order", ["order_handler"], [order_handler])
+    if msg == 'backtest:start':
+        cache.set('done'+cache_type,1)
+        backtest_manager = threadManager(cache_type, ["kite_simulator","trade_handler"], [kite_simulator, trade_handler])
+    elif msg == 'backtest:stop':
+        job_alive(backtest_manager)
+        backtest_manager.job.terminate()
+        time.sleep(3)
+        job_alive(backtest_manager)
+    elif msg == 'backtest:status':
+        job_alive(backtest_manager)
+    elif msg == 'backtest:reset':
+        backtest_manager.job.terminate()
+        time.sleep(2)
+        job_alive(backtest_manager)
+        backtest_manager = threadManager(cache_type, ["kite_simulator","trade_handler"], [kite_simulator, trade_handler])
+        time.sleep(3)
+        job_alive(backtest_manager)
+        cache.set('done'+cache_type,1)
+    elif msg == 'live:start':
+        live_trade_manager = threadManager("live", ["order_handler"], [order_handler])
+    else:
+        cache.set('done'+cache_type,1)
+        backtest_manager = threadManager(cache_type, ["kite_simulator","trade_handler"], [kite_simulator, trade_handler])
 
-    # 2: Start kite websocket connections
-    # Initialise
-    #kws = KiteTicker(KiteAPIKey, kite.access_token)
+        # 2: Start kite websocket connections
+        # Initialise
+        #kws = KiteTicker(KiteAPIKey, kite.access_token)
 
-    # Assign the callbacks.
-    #kws.on_ticks = on_ticks
-    #kws.on_connect = on_connect
-    #kws.on_order_update = on_order_update
+        # Assign the callbacks.
+        #kws.on_ticks = on_ticks
+        #kws.on_connect = on_connect
+        #kws.on_order_update = on_order_update
     
 #TODO: Watchdog implementation to resume processes
 #TODO: Implementation of user initiated aborts and restart

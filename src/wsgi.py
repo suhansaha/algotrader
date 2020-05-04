@@ -7,7 +7,8 @@ pinfo("***   Starting New Session   ***")
 pinfo("================================")
 
 freedom = threadManager("freedom", ["freedom_init"], [freedom_init])
+redis_conn.publish('freedom_initfreedom','backtest:start')
 
 # Initializes multiple worker threads and AppServer
 if __name__ == "__main__":
-    app.run()
+    app.run(debug=False)

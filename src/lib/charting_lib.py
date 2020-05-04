@@ -104,3 +104,13 @@ def render_charts(data, trade, symbol):
         pass
 
     return fig
+
+
+def freedom_chart(symbol):
+    if not redis_conn.exists(symbol):
+        return ""
+
+    ohlc_df = pd.read_json(redis_conn.get(symbol), orient='columns')
+    ohlc_df.index.rename('date', inplace=True)
+    trade_df = pd.read_json(redis_conn.get(symbol+cache_type+'Trade'), orient='columns')
+    return render_charts(ohlc_df, trade_df, symbol)
