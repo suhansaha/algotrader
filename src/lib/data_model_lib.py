@@ -19,8 +19,8 @@ class cache_state(Redis):
         pinfo(hash_key)
 
         if self.hlen(hash_key) == 0 or reset == True:
-            self.hmset(hash_key, {'stock':key, 'qty':0, 'SL %':0.0, 'TP %':0.0, 'amount':0,'p_n_l':0.0,'Total_p_n_l':0.0,
-                                       'low':0.0,'sl':0.0,'ltp':0.0,'tp':0.0,'high':0.0,'last_processed':'1999-01-01',
+            self.hmset(hash_key, {'stock':key, 'qty':0, 'SL %':0.0, 'TP %':0.0, 'amount':0,'price':0.0,'P&L':0.0,'P&L %':0.0,'Total P&L':0.0,'Total P&L %':0.0,
+                                       'low':0.0,'sl':0.0,'ltp':0.0,'ltp %':0.0,'tp':0.0,'high':0.0,'last_processed':'1999-01-01',
                                        'state':'INIT','mode':'PAUSE','algo':'', 'freq':'day','hdf_freq':'day'})
             # Trade Log: [{timestamp, buy, sale, amount, profit, cum_profit, W_L, Mode}]
             # Amount: -ve for Buy, +ve for sale; W_L: +1 for Win, -1 for Loss; Mode: EN|EX|SL|TP|F

@@ -206,7 +206,9 @@ def add_row(value, ts, rows, columns):
             live_cache.setValue(row['stock'], 'SL %', row['SL %'])
             live_cache.setValue(row['stock'], 'algo', row['algo'])
             live_cache.setValue(row['stock'], 'freq', row['freq'])
+            live_cache.setValue(row['stock'], 'mode', row['mode'])
     else:
+        pinfo("Remove all the stock: {}".format(stock))
         live_cache.remove()
         
     try:
@@ -224,7 +226,7 @@ def add_row(value, ts, rows, columns):
 
     if df.shape[0] > 0:
         df = df[['stock', 'qty', 'TP %', 'SL %', 'algo', 'freq', 
-        'amount', 'p_n_l', 'Total_p_n_l', 'low', 'sl', 'ltp', 'tp', 'high', 'mode','state','last_processed']]
+       'amount', 'price','P&L','P&L %', 'Total P&L', 'Total P&L %','low', 'sl', 'ltp', 'ltp %','tp', 'high', 'mode', 'state','last_processed']]
             
         return df.to_dict('records'), [{"name": i, "id": i} for i in df.columns]
     else:

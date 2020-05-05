@@ -127,13 +127,14 @@ backtest_tab = dbc.Row([
 #my_cache = cache_state(cache_type)
 live_cache = cache_state('live')
 df = live_cache.getValue()
-
+pinfo(df)
 try:
     df = df[['stock', 'qty', 'TP %', 'SL %', 'algo', 'freq', 
-       'amount', 'p_n_l', 'Total_p_n_l', 'low', 'sl', 'ltp', 'tp', 'high', 'state','last_processed']]
+       'amount', 'price','P&L','P&L %', 'Total P&L', 'Total P&L %','low', 'sl', 'ltp', 'ltp %','tp', 'high', 'mode', 'state','last_processed']]
 except:
+    pinfo('something went wrong with live table')
     df = pd.DataFrame(columns=['stock', 'qty', 'TP %', 'SL %', 'algo', 'freq', 
-       'amount', 'p_n_l', 'Total_p_n_l', 'low', 'sl', 'ltp', 'tp', 'high', 'state','last_processed'])
+       'amount', 'price','P&L','P&L %', 'Total P&L', 'Total P&L %','low', 'sl', 'ltp', 'ltp %','tp', 'high', 'mode', 'state','last_processed'])
 
 if df.shape[0] > 0:
     trade_table = df_to_table(df, 'table-editing-simple', True, True)

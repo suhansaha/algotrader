@@ -237,6 +237,9 @@ def trade_init(stock_key, algo, freq, qty, sl, target):
     cache.setValue(stock_key, 'qty', qty)
     cache.setValue(stock_key, 'SL %', sl)
     cache.setValue(stock_key, 'TP %', target)
+    cache.setValue(stock_key, 'P&L', 0)
+    cache.setValue(stock_key, 'Total P&L', 0)
+    cache.setValue(stock_key, 'price', 0)
 
     #cache.set(stock_key, pd.DataFrame().to_json(orient='columns')) #Used for plotting
     
@@ -548,24 +551,47 @@ def placeorder(prefix, df, stock, last_processed):
     amount = ltp[0] *qty
     sl = 0
     tp = 0
+    price = float(cache.getValue(stock,'price'))
+    profit = 0
+    pl_pt = 0
+    totalprofit =  float(cache.getValue(stock,'Total P&L'))
 
+    pdebug5("Place Order: {},{},{},{}".format(ltp[0], price, profit, totalprofit))
     tmp_df = pd.DataFrame()
     if prefix == "B: EN: ":
         tmp_df['buy'] = ltp
         sl = ltp[0] * ( 1 - sl_pt / 100 )
         tp =  ltp[0] * ( 1 + tp_pt / 100 )
+        price = ltp[0] 
     elif prefix == "B: EX: " or prefix == "B: SL: " or prefix == "B: TP: ":
         tmp_df['buy'] = ltp
+        profit = (price - ltp[0]) * qty
+        pl_pt = profit/price * 100
+        price = 0
     elif prefix == "S: EN: ":
         tmp_df['sell'] = ltp
         sl = ltp[0] * ( 1 + sl_pt / 100 )
         tp =  ltp[0] * ( 1 - tp_pt / 100 )
+        price = ltp[0] 
     elif prefix == "S: EX: " or prefix == "S: SL: " or prefix == "S: TP: ":
         tmp_df['sell'] = ltp
+        profit = (ltp[0] - price) * qty
+        pl_pt = profit/price * 100
+        price = 0
+
+    totalprofit = totalprofit + profit
+
+    total_pt = totalprofit / amount * 100
+    
 
     cache.setValue(stock,'amount', amount)
     cache.setValue(stock,'sl', sl)
     cache.setValue(stock,'tp', tp)
+    cache.setValue(stock,'price', price)
+    cache.setValue(stock,'P&L', profit)
+    cache.setValue(stock,'P&L %', pl_pt)
+    cache.setValue(stock,'Total P&L', totalprofit)
+    cache.setValue(stock,'Total P&L %', total_pt)
 
     tmp_df['mode'] = prefix
     cache.pushTrade(stock, tmp_df)
