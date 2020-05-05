@@ -55,6 +55,7 @@ def myalgo(ohlc_data_df, algo='', state='SCANNING'):
 
     decision = 'WAIT'
     redis_conn.set('decision'+cache_type,decision)
+    TIME = ohlc_data_temp.index[-1].minute+ohlc_data_temp.index[-1].hour*60
     
     if algo != '':
         postfix = "redis_conn.set('decision"+cache_type+"',decision)"

@@ -433,6 +433,9 @@ def trade_job(hash_key):
     cache.setValue(hash_key, 'high', high)
 
     last_processed = ohlc_df.index[-1].strftime('%Y-%m-%d %H:%M')
+
+    time_val = ohlc_df.index[-1].minute+ohlc_df.index[-1].hour*60
+    cutoff_time = (15*60+15)
     pdebug1("{}=>{}".format(last_processed,cache.getValue(hash_key,'last_processed')))
     
     if last_processed == cache.getValue(hash_key,'last_processed'):   
@@ -453,9 +456,10 @@ def trade_job(hash_key):
     elif state == 'SCANNING':  # State: Scanning
         # 1: Run trading algorithm for entering trade
         tradeDecision = algo_idle(ohlc_df, algo, state)
-        
+        if time_val >= (cutoff_time-15):
+            pass
         # 2: If Algo returns Buy: set State to 'Pending Order: Long'
-        if tradeDecision=="BUY":
+        elif tradeDecision=="BUY":
             placeorder("B: EN: ", ohlc_df, stock, last_processed)
             #logtrade("BUY : {} : {} -> {}".format(last_processed, stock, ohlc_get(ohlc_df,'close')))
             cache.setValue(hash_key,'state','PO:LONG')
@@ -484,8 +488,10 @@ def trade_job(hash_key):
     
     elif state == 'LONG': # State: Long
         # 1: If notification for AutoSquare Off: set state to init
-
-        if ltp < sl:
+        if time_val >= cutoff_time:
+            placeorder("S: EX: ", ohlc_df, stock, last_processed)
+            cache.setValue(hash_key,'state','SQUAREOFF')
+        elif ltp < sl:
             placeorder("S: SL: ", ohlc_df, stock, last_processed)
             cache.setValue(hash_key,'state','SQUAREOFF')
         elif ltp > tp:
@@ -505,7 +511,10 @@ def trade_job(hash_key):
     
     elif state == 'SHORT': # State: Short
         # 1: If notification for AutoSquare Off: set state to init
-        if ltp > sl:
+        if time_val >= cutoff_time:
+            placeorder("B: EX: ", ohlc_df, stock, last_processed)
+            cache.setValue(hash_key,'state','SQUAREOFF')
+        elif ltp > sl:
             placeorder("B: SL: ", ohlc_df, stock, last_processed)
             cache.setValue(hash_key,'state','SQUAREOFF')
         elif ltp < tp:
