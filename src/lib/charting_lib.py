@@ -56,7 +56,7 @@ def plot_trade(fig, df, toffset, pos=1):
 
 
 
-def render_charts(data, trade, symbol): 
+def render_charts(data, trade, symbol, chart_type='haikin'): 
     fig = make_subplots(rows=3, cols=1, shared_xaxes=True, row_width=[3,1,5], vertical_spacing = 0.01)
     fig['layout']={'xaxis':{'rangeselector': {'buttons': [{'count': 1, 'label': '1h', 'step': 'hour', 'stepmode': 'backward'},
                                             {'count': 3, 'label': '3h', 'step': 'hour', 'stepmode': 'backward'},
@@ -79,8 +79,12 @@ def render_charts(data, trade, symbol):
         price['rsi'] = RSI(price.close, timeperiod=14)
         price['bbt'], price['bbm'], price['bbb'] = BBANDS(price.close, timeperiod=20, nbdevup=1.6, nbdevdn=1.6, matype=0)
      
-        #plot_candle(fig, price, 1)
-        plot_candle(fig, pha, 1)
+        if chart_type=='haikin':
+            plot_candle(fig, pha, 1)
+        elif chart_type=='candle' :
+            plot_candle(fig, price, 1)
+        else:
+            fig = plot_3_lines(fig, price, 'close')
         
         fig = plot_bbb(fig, price, 1)
         fig = plot_macd(fig, price, 2)
@@ -106,11 +110,11 @@ def render_charts(data, trade, symbol):
     return fig
 
 
-def freedom_chart(symbol):
+def freedom_chart(symbol, chart_type='haikin'):
     if not redis_conn.exists(symbol):
         return ""
 
     ohlc_df = pd.read_json(redis_conn.get(symbol), orient='columns')
     ohlc_df.index.rename('date', inplace=True)
     trade_df = pd.read_json(redis_conn.get(symbol+cache_type+'Trade'), orient='columns')
-    return render_charts(ohlc_df, trade_df, symbol)
+    return render_charts(ohlc_df, trade_df, symbol, chart_type)

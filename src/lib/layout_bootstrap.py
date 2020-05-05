@@ -70,7 +70,7 @@ form_div = html.Div([
             dbc.Row([
                 dbc.Col(dbc.InputGroup([ dbc.InputGroupAddon("Qty", addon_type="prepend"),dbc.Input(id="input-qty", value=10) ], size="sm"),width=2),
                 dbc.Col(dbc.InputGroup([ dbc.InputGroupAddon("SL", addon_type="prepend"),dbc.Input(id="input-sl", placeholder="0.0", value=1),dbc.InputGroupAddon("%", addon_type="append") ], size="sm"),width=2),
-                dbc.Col(dbc.InputGroup([ dbc.InputGroupAddon("Target", addon_type="prepend"),dbc.Input(id="input-target", placeholder="0.0", value=1),dbc.InputGroupAddon("%", addon_type="append") ], size="sm"),width=2),
+                dbc.Col(dbc.InputGroup([ dbc.InputGroupAddon("TP", addon_type="prepend"),dbc.Input(id="input-target", placeholder="0.0", value=1),dbc.InputGroupAddon("%", addon_type="append") ], size="sm"),width=2),
                 dbc.Col( dbc.InputGroup([ dcc.DatePickerRange( id='date-picker-range', end_date=cal_end_date, start_date=cal_start_date),
                                             dbc.Select(id='freq', value='day', options=freq_options )], size="sm"), width=6, sm='12', md=5),
                 dbc.Col(dbc.Button('Go', id='button', color="success", disabled=True, size='sm'),width=1)
@@ -80,6 +80,7 @@ form_div = html.Div([
 
 graph_div = dbc.FormGroup([
         dcc.Dropdown(id='select_chart', options=stock_options),
+        dcc.Dropdown(id='chart_type', value='haikin',options=[{'label':'Haikin','value':'haikin'}, {'label':'Candle','value':'candle'}, {'label':'Line','value':'line'}]),
         html.Div(id='trade_stat', children='', style={'white-space': 'pre'}),
         dcc.Graph(id='example-graph'),
         html.Div(id='trade_summary', children='To be loaded...'),
