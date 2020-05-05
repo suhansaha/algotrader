@@ -98,7 +98,7 @@ class threadManager():
 ###                Freedom App                     ###
 ######################################################
 no_of_hist_candles = 100
-getDeltaT = lambda freq: timedelta(days=no_of_hist_candles) if freq == 'day' else timedelta(days=5)
+getDeltaT = lambda freq: timedelta(days=no_of_hist_candles*2) if freq == 'day' else timedelta(days=5)
 
 def trade_analysis(stock):
     pdebug1("trade_analysis: {}".format(stock))
@@ -525,8 +525,8 @@ def trade_job(hash_key):
                 cache.setValue(hash_key,'state','SQUAREOFF')
         
     elif state == 'SQUAREOFF':  # State: Awaiting Square Off
-        # 1: On Fill notification: set state to Init
-        cache.setValue(hash_key,'state','INIT')
+        # 1: On Fill notification: set state to SCANNING
+        cache.setValue(hash_key,'state','SCANNING')
         pass
    
     trade_lock.release()

@@ -77,10 +77,14 @@ form_div = html.Div([
             ], no_gutters=True),
         ])
 
-
+chart_type_options = [{'label':'Haikin','value':'haikin'}, {'label':'Candle','value':'candle'}, {'label':'Line','value':'line'}]
+chart_list_options = [{'label':'MACD','value':'macd'}, {'label':'RSI','value':'rsi'}]
+chart_overlays_options = [{'label':'Bollinger','value':'BBB'}]
 graph_div = dbc.FormGroup([
-        dcc.Dropdown(id='select_chart', options=stock_options),
-        dcc.Dropdown(id='chart_type', value='haikin',options=[{'label':'Haikin','value':'haikin'}, {'label':'Candle','value':'candle'}, {'label':'Line','value':'line'}]),
+        dbc.InputGroup([dcc.Dropdown(id='select_chart', options=stock_options, style={'width':'150px'}),
+        dcc.Dropdown(id='chart_type', value='haikin',options=chart_type_options, style={'width':'150px'}),
+        dcc.Dropdown(id='chart_overlays', disabled=True, multi=True, value=['macd','RSI'],options=chart_list_options, style={'width':'200px'}),
+        dcc.Dropdown(id='chart_list', disabled=True, multi=True, value='BBB',options=chart_overlays_options, style={'width':'200px'})]),
         html.Div(id='trade_stat', children='', style={'white-space': 'pre'}),
         dcc.Graph(id='example-graph'),
         html.Div(id='trade_summary', children='To be loaded...'),

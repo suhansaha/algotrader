@@ -42,6 +42,9 @@ def myalgo(ohlc_data_df, algo='', state='SCANNING'):
     #pdebug(ohlc_data_df.shape)
     ohlc_data_temp = ohlc_data_df.tail(30)
     
+    if ohlc_data_temp.shape[0] < 30:
+        return 'WAIT'
+
     OPEN = ohlc_data_temp['open']
     CLOSE = ohlc_data_temp['close']
     HIGH = ohlc_data_temp['high']
