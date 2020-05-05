@@ -1,11 +1,11 @@
 import pandas as pd
 from lib.layout_bootstrap import *
-import redis
 from flask import Flask, render_template, request
 from collections import deque
 from lib.logging_lib import pdebug, pdebug1, pdebug5, perror, pinfo, redis_conn, cache_type
 from lib.charting_lib import *
 from lib.multitasking_lib import trade_analysis_raw
+import json
 
 app = Flask(__name__)
 
@@ -20,8 +20,7 @@ def store_algo(algo, algo_name="default"):
     algo_f.write(algo)
     algo_f.close()
 
-import pandas as pd
-import json
+
 @dash_app.callback(
     Output('graph-update', 'n_intervals'),
     [Input('button', 'n_clicks')],

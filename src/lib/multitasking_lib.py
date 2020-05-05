@@ -238,7 +238,7 @@ def trade_init(stock_key, algo, freq, qty, sl, target):
     cache.setValue(stock_key, 'SL %', sl)
     cache.setValue(stock_key, 'TP %', target)
 
-    cache.set(stock_key, pd.DataFrame().to_json(orient='columns')) #Used for plotting
+    #cache.set(stock_key, pd.DataFrame().to_json(orient='columns')) #Used for plotting
     
     trade_lock_store[stock_key] = Lock()
 
@@ -275,9 +275,9 @@ def kite_simulator(manager, msg):
 
     cache.publish('trade_handler'+cache_postfix,'start')
 
-    stock = data['stock'][-1] #TODO: Add for loop
-    cache.set('logMsg'+cache_postfix,'Backtest Started: {} :\n'.format(stock)) # Used for displaying trade log
+    #cache.set('logMsg'+cache_postfix,'Backtest Started: {} :\n'.format(stock)) # Used for displaying trade log
 
+    stock = data['stock'][-1]
     no = ohlc_data[stock].shape[0]
     counter = 0
     for i in np.linspace(0,no-1,no): # Push data
@@ -287,12 +287,8 @@ def kite_simulator(manager, msg):
             row = ohlc_data[stock].iloc[i]
             index = ohlc_data[stock].index[i]
         
-            #update_plot_cache(stock, row)
-            # Check square off conditions
-        
             # Construct Json message like Kite
             mydate = "{}-{}-{} {}:{}:{}".format(index.year,index.month,index.day, index.hour, index.minute, index.second)        
-            #msg = {exchange+":"+stock:{"ohlc":{'date':mydate,'open':row['open'],'high':row['high'],'low':row['low'],'close':row['close'],'volume':row['volume']}}, "type":"sim"}
             msg = {exchange+":"+stock:{"ohlc":{'date':mydate,'open':row['open'],'high':row['high'],'low':row['low'],'close':row['close'],'volume':row['volume']}}}
             pdebug1(msg)
             msg = json.dumps(msg)
@@ -305,8 +301,8 @@ def kite_simulator(manager, msg):
                 time.sleep(2)
             
 
-    for stock in  data['stock']:
-        cache.set(stock, ohlc_data[stock].to_json(orient='columns'))
+    #for stock in  data['stock']:
+    #    cache.set(stock, ohlc_data[stock].to_json(orient='columns'))
     
     pinfo('Kite_Simulator: Done: {}'.format(counter))
 
@@ -329,10 +325,10 @@ def kite_simulator(manager, msg):
     pdebug('Kite_Simulator: Trade Analysis Done')
 
 
-def update_plot_cache(key, tmp_df):
-    cache_buff = pd.read_json(cache.get(key))
-    cache_buff = cache_buff.append(tmp_df)
-    cache.set(key, cache_buff.to_json(orient='columns'))
+#def update_plot_cache(key, tmp_df):
+#    cache_buff = pd.read_json(cache.get(key))
+#    cache_buff = cache_buff.append(tmp_df)
+#    cache.set(key, cache_buff.to_json(orient='columns'))
 
 
 def trade_handler(manager, msg):
