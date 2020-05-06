@@ -146,9 +146,9 @@ trade_tab = dbc.Row([
         [dbc.Row(dbc.Col(dcc.Dropdown(id='stock_picker_live', multi=True,  className='columns six', options=stock_options))),
          dbc.Row(dbc.Col(trade_table, style={'padding-left':'20px'}))
         ]
-    , width=8),
+    , width=9),
     dbc.Col(html.Div( id='msg_live', style={'font-size':'0.8em','border':'1px solid olivegreen','overflow-y': 'scroll',
-'white-space': 'pre', 'background':'darkslategray','color':'lightgray','padding':'20px','height':'650px'}, children='Welcome to Freedom'), width=4
+'white-space': 'pre', 'background':'darkslategray','color':'lightgray','padding':'20px','height':'650px'}, children='Welcome to Freedom'), width=3
 )]
 )
 

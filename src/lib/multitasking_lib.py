@@ -276,7 +276,7 @@ def kite_simulator(manager, msg):
         ohlc_data[stock_key] = df
         trade_init(stock_key, algo, freq, qty, sl, target)
 
-    cache.publish('trade_handler'+cache_postfix,'start')
+    cache.publish('tick_handler'+cache_postfix,'start')
 
     #cache.set('logMsg'+cache_postfix,'Backtest Started: {} :\n'.format(stock)) # Used for displaying trade log
 
@@ -334,8 +334,8 @@ def kite_simulator(manager, msg):
 #    cache.set(key, cache_buff.to_json(orient='columns'))
 
 
-def trade_handler(manager, msg):
-    pinfo('trade_handler: {}'.format(msg))
+def tick_handler(manager, msg):
+    pinfo('tick_handler: {}'.format(msg))
 
     # Step 0: Clean queue
     cache.xtrim('msgBufferQueue'+cache_postfix,maxlen=0, approximate=False)
@@ -357,7 +357,7 @@ def trade_handler(manager, msg):
         
         # Step 3: Process tick: Start a worker thread for each msg       
         for msg in msgs_q[0][1]:
-            pdebug1('trade_handler: {}'.format(msg[1]['msg']))
+            pdebug1('tick_handler: {}'.format(msg[1]['msg']))
             counter = counter + 1
             try:
                 data = json.loads(msg[1]['msg'])
@@ -627,7 +627,7 @@ def freedom_init(manager, msg):
 
     if msg == 'backtest:start':
         cache.set('done'+cache_type,1)
-        backtest_manager = threadManager(cache_type, ["kite_simulator","trade_handler"], [kite_simulator, trade_handler])
+        backtest_manager = threadManager(cache_type, ["kite_simulator","tick_handler"], [kite_simulator, tick_handler])
     elif msg == 'backtest:stop':
         job_alive(backtest_manager)
         backtest_manager.job.terminate()
@@ -639,7 +639,7 @@ def freedom_init(manager, msg):
         backtest_manager.job.terminate()
         time.sleep(2)
         job_alive(backtest_manager)
-        backtest_manager = threadManager(cache_type, ["kite_simulator","trade_handler"], [kite_simulator, trade_handler])
+        backtest_manager = threadManager(cache_type, ["kite_simulator","tick_handler"], [kite_simulator, tick_handler])
         time.sleep(3)
         job_alive(backtest_manager)
         cache.set('done'+cache_type,1)
@@ -647,7 +647,7 @@ def freedom_init(manager, msg):
         live_trade_manager = threadManager("live", ["order_handler"], [order_handler])
     else:
         cache.set('done'+cache_type,1)
-        backtest_manager = threadManager(cache_type, ["kite_simulator","trade_handler"], [kite_simulator, trade_handler])
+        backtest_manager = threadManager(cache_type, ["kite_simulator","tick_handler"], [kite_simulator, tick_handler])
 
         # 2: Start kite websocket connections
         # Initialise
