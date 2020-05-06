@@ -38,7 +38,11 @@ def HAIKINASI(ohlc_data_df):
 
 ohlc_get = lambda df, key: df.iloc[-1][key]
 REF = lambda df, i: df.iloc[-i-1]
-def myalgo(ohlc_data_df, algo='', state='SCANNING'): 
+
+def order_details(cache, key, decision = 'WAIT', x2 = -1, qty=-1, sl=-1, tp=-1):
+    redis_conn.set('decision'+cache_type,decision)
+
+def myalgo(cache, key, ohlc_data_df, algo='', state='SCANNING'): 
     #pdebug(ohlc_data_df.shape)
     ohlc_data_temp = ohlc_data_df.tail(30)
     
@@ -56,11 +60,14 @@ def myalgo(ohlc_data_df, algo='', state='SCANNING'):
     decision = 'WAIT'
     redis_conn.set('decision'+cache_type,decision)
     TIME = ohlc_data_temp.index[-1].minute+ohlc_data_temp.index[-1].hour*60
+    BUY = lambda qty=-1, sl=-1, tp=-1, x2 = -1:order_details(cache, key, 'BUY', x2, qty, sl, tp)
+    SELL = lambda qty=-1, sl=-1, tp=-1, x2 = -1:order_details(cache, key, 'SELL', x2, qty, sl, tp)
+    WAIT = lambda : order_details(cache, key, 'WAIT')
     
     if algo != '':
-        postfix = "redis_conn.set('decision"+cache_type+"',decision)"
+        #postfix = "redis_conn.set('decision"+cache_type+"',decision)"
         
-        code = algo + '\n'+ postfix
+        code = algo #+ '\n'+ postfix
         #pinfo(code)
 
         try:
@@ -69,14 +76,12 @@ def myalgo(ohlc_data_df, algo='', state='SCANNING'):
             perror("Error in executing algorithm")
             pass
     else:
-        #upper, middle, lower = BBANDS(CLOSE)
-
         if (REF(haCLOSE,2) < REF(haOPEN,2)) and (REF(haCLOSE,1) < REF(haOPEN,1)) and (REF(haCLOSE,0) > REF(haOPEN,0)): 
-            decision = "BUY"
+            BUY()
         elif (REF(haCLOSE,2) > REF(haOPEN,2)) and (REF(haCLOSE,1) > REF(haOPEN,1)) and (REF(haCLOSE,0) < REF(haOPEN,0)): 
-            decision = "SELL"
+            SELL()
 
-        redis_conn.set('decision'+cache_type,decision)
+        #redis_conn.set('decision'+cache_type,decision)
 
     decision = redis_conn.get('decision'+cache_type)
     return decision #"BUY"|"SELL"

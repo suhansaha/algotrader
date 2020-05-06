@@ -396,11 +396,6 @@ def trade_handler(manager, msg):
             # Start job to process Tick
             manager.add(stock, trade_job, False, hash_key)
             #pdebug(msg[0])
-            
-# A thread function to process notifications and tick
-algo_idle = myalgo
-algo_long_so = myalgo
-algo_short_so = myalgo
 
 def trade_job(hash_key):
     pdebug1('trade_job: {}'.format(hash_key))
@@ -454,20 +449,20 @@ def trade_job(hash_key):
     
     elif state == 'SCANNING':  # State: Scanning
         # 1: Run trading algorithm for entering trade
-        tradeDecision = algo_idle(ohlc_df, algo, state)
+        tradeDecision = myalgo(cache, hash_key, ohlc_df, algo, state)
         if time_val >= (cutoff_time-15):
             pass
         # 2: If Algo returns Buy: set State to 'Pending Order: Long'
         elif tradeDecision=="BUY":
             placeorder("B: EN: ", ohlc_df, stock, last_processed)
             #logtrade("BUY : {} : {} -> {}".format(last_processed, stock, ohlc_get(ohlc_df,'close')))
-            cache.setValue(hash_key,'state','PO:LONG')
+            cache.setValue(hash_key,'state','LONG') #TODO
         
         # 3: If Algo returns Sell: set State to 'Pending Order: Short'
         elif tradeDecision=="SELL":
             placeorder("S: EN: ", ohlc_df, stock, last_processed)
             #logtrade("SELL: {} : {} -> {}".format(last_processed, stock, ohlc_get(ohlc_df,'close')))
-            cache.setValue(hash_key,'state','PO:SHORT')
+            cache.setValue(hash_key,'state','SHORT') #TODO
         
         # 4: Update TradeMetaData: Push order details to OrderQueue
     
@@ -499,7 +494,7 @@ def trade_job(hash_key):
             pass
         else:
             # 2: Else run trading algorithm for square off
-            tradeDecision = algo_long_so(ohlc_df, algo, state)
+            tradeDecision = myalgo(cache, hash_key, ohlc_df, algo, state)
             if tradeDecision == "SELL":
                 placeorder("S: EX: ", ohlc_df, stock, last_processed)
                 #logtrade("SO-S: {} : {} -> {}".format(last_processed, stock, ohlc_get(ohlc_df,'close')))
@@ -522,8 +517,7 @@ def trade_job(hash_key):
             pass
         else:
             # 2: Else run trading algorithm for square off
-            tradeDecision = algo_short_so(ohlc_df, algo, state)
-            
+            tradeDecision = myalgo(cache, hash_key, ohlc_df, algo, state)
             if tradeDecision == "BUY":
                 placeorder("B: EX: ", ohlc_df, stock, last_processed)
                 #logtrade("SO-B: {} : {} -> {}".format(last_processed, stock, ohlc_get(ohlc_df,'close')))
