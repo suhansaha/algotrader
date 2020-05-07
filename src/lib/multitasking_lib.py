@@ -1,4 +1,5 @@
 import threading
+from threading import Semaphore
 import time
 import pandas as pd
 import math
@@ -246,6 +247,8 @@ def trade_init(stock_key, algo, freq, qty, sl, target):
     trade_lock_store[stock_key] = Lock()
 
 
+max_simu_msg = 300
+simulator_sem = Semaphore(max_simu_msg)
 def kite_simulator(manager, msg):
     pdebug('kite_simulator: {}'.format(msg))
 
@@ -276,7 +279,7 @@ def kite_simulator(manager, msg):
         ohlc_data[stock_key] = df
         trade_init(stock_key, algo, freq, qty, sl, target)
 
-    cache.publish('tick_handler'+cache_postfix,'start')
+    cache.publish('ohlc_tick_handler'+cache_postfix,'start')
 
     #cache.set('logMsg'+cache_postfix,'Backtest Started: {} :\n'.format(stock)) # Used for displaying trade log
 
@@ -287,6 +290,7 @@ def kite_simulator(manager, msg):
         i = int(i)
 
         for stock in  data['stock']:
+            simulator_sem.acquire()
             row = ohlc_data[stock].iloc[i]
             index = ohlc_data[stock].index[i]
         
@@ -299,9 +303,9 @@ def kite_simulator(manager, msg):
             # Call notification_despatcher
             notification_despatcher(None, msg)
             counter = counter + 1
-            if counter % 500 == 0:
-                pinfo('Kite simulator is on a short break')
-                time.sleep(2)
+            #if counter % 500 == 0:
+            #    pinfo('Kite simulator is on a short break')
+            #    time.sleep(2)
             
 
     #for stock in  data['stock']:
@@ -333,9 +337,9 @@ def kite_simulator(manager, msg):
 #    cache_buff = cache_buff.append(tmp_df)
 #    cache.set(key, cache_buff.to_json(orient='columns'))
 
-
-def tick_handler(manager, msg):
-    pinfo('tick_handler: {}'.format(msg))
+trade_job_sem = Semaphore(10)
+def ohlc_tick_handler(manager, msg):
+    pinfo('ohlc_tick_handler: {}'.format(msg))
 
     # Step 0: Clean queue
     cache.xtrim('msgBufferQueue'+cache_postfix,maxlen=0, approximate=False)
@@ -357,7 +361,7 @@ def tick_handler(manager, msg):
         
         # Step 3: Process tick: Start a worker thread for each msg       
         for msg in msgs_q[0][1]:
-            pdebug1('tick_handler: {}'.format(msg[1]['msg']))
+            pdebug1('ohlc_tick_handler: {}'.format(msg[1]['msg']))
             counter = counter + 1
             try:
                 data = json.loads(msg[1]['msg'])
@@ -394,6 +398,8 @@ def tick_handler(manager, msg):
             cache.pushOHLC(hash_key,temp_df)
 
             # Start job to process Tick
+            simulator_sem.release()
+            trade_job_sem.acquire()
             manager.add(stock, trade_job, False, hash_key)
             #pdebug(msg[0])
 
@@ -411,9 +417,9 @@ def trade_job(hash_key):
         return
     freq = cache.getValue(hash_key,'freq')
     algo_name = cache.getValue(hash_key,'algo')
+    algo = cache.hget('algos',algo_name)
     tp = float(cache.getValue(hash_key,'tp'))
     sl = float(cache.getValue(hash_key,'sl'))
-    algo = cache.hget('algos',algo_name)
 
     #pdebug("{}: {}: {}".format(hash_key, stock, state ))
     ohlc_df = cache.getOHLC(hash_key)
@@ -434,18 +440,15 @@ def trade_job(hash_key):
     
     if last_processed == cache.getValue(hash_key,'last_processed'):   
         trade_lock.release()
+        trade_job_sem.release()
         return
     else:
         cache.setValue(hash_key,'last_processed',last_processed)
     
     # Step 2: Switch to appropriate state machine based on current state
     if state == 'INIT': # State: Init
-        # 1: Populate Redis buffer stock+"OHLCBuffer" with historical data
-            # Done inside thread handler
-        
         # 2: Set state to Scanning
         cache.setValue(hash_key,'state','SCANNING')
-        pass
     
     elif state == 'SCANNING':  # State: Scanning
         # 1: Run trading algorithm for entering trade
@@ -470,14 +473,12 @@ def trade_job(hash_key):
     
         # 1: On Fill: set State to Long
         cache.setValue(hash_key,'state','LONG')
-        pass
     
     
     elif state == 'PO:SHORT': # State: Pending Order: Short
     
         # 1: On Fill: set State to Short
         cache.setValue(hash_key,'state','SHORT')
-        pass
     
     
     elif state == 'LONG': # State: Long
@@ -514,7 +515,6 @@ def trade_job(hash_key):
         elif ltp < tp:
             placeorder("B: TP: ", ohlc_df, stock, last_processed)
             cache.setValue(hash_key,'state','SQUAREOFF')
-            pass
         else:
             # 2: Else run trading algorithm for square off
             tradeDecision = myalgo(cache, hash_key, ohlc_df, algo, state)
@@ -529,9 +529,9 @@ def trade_job(hash_key):
     elif state == 'SQUAREOFF':  # State: Awaiting Square Off
         # 1: On Fill notification: set state to SCANNING
         cache.setValue(hash_key,'state','SCANNING')
-        pass
    
     trade_lock.release()
+    trade_job_sem.release()
 
 
 def placeorder(prefix, df, stock, last_processed):
@@ -627,7 +627,7 @@ def freedom_init(manager, msg):
 
     if msg == 'backtest:start':
         cache.set('done'+cache_type,1)
-        backtest_manager = threadManager(cache_type, ["kite_simulator","tick_handler"], [kite_simulator, tick_handler])
+        backtest_manager = threadManager(cache_type, ["kite_simulator","ohlc_tick_handler"], [kite_simulator, ohlc_tick_handler])
     elif msg == 'backtest:stop':
         job_alive(backtest_manager)
         backtest_manager.job.terminate()
@@ -639,7 +639,7 @@ def freedom_init(manager, msg):
         backtest_manager.job.terminate()
         time.sleep(2)
         job_alive(backtest_manager)
-        backtest_manager = threadManager(cache_type, ["kite_simulator","tick_handler"], [kite_simulator, tick_handler])
+        backtest_manager = threadManager(cache_type, ["kite_simulator","ohlc_tick_handler"], [kite_simulator, ohlc_tick_handler])
         time.sleep(3)
         job_alive(backtest_manager)
         cache.set('done'+cache_type,1)
@@ -647,7 +647,7 @@ def freedom_init(manager, msg):
         live_trade_manager = threadManager("live", ["order_handler"], [order_handler])
     else:
         cache.set('done'+cache_type,1)
-        backtest_manager = threadManager(cache_type, ["kite_simulator","tick_handler"], [kite_simulator, tick_handler])
+        backtest_manager = threadManager(cache_type, ["kite_simulator","ohlc_tick_handler"], [kite_simulator, ohlc_tick_handler])
 
         # 2: Start kite websocket connections
         # Initialise

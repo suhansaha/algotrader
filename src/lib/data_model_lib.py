@@ -16,8 +16,6 @@ class cache_state(Redis):
     def add(self, key, reset=False):
         hash_key = key+self.hash_postfix
         
-        pinfo(hash_key)
-
         if self.hlen(hash_key) == 0 or reset == True:
             self.hmset(hash_key, {'stock':key, 'qty':0, 'SL %':0.0, 'TP %':0.0, 'amount':0,'price':0.0,'P&L':0.0,'P&L %':0.0,'Total P&L':0.0,'Total P&L %':0.0,
                                        'low':0.0,'sl':0.0,'ltp':0.0,'ltp %':0.0,'tp':0.0,'high':0.0,'last_processed':'1999-01-01',
@@ -27,6 +25,8 @@ class cache_state(Redis):
             self.set(hash_key+'Trade', pd.DataFrame().to_json(orient='columns'))
             self.set(hash_key+'OHLC', pd.DataFrame().to_json(orient='columns'))
         self.sadd(self.hash_postfix, key)
+
+        pinfo('{}=>{}'.format(hash_key, self.hgetall(hash_key)))
         
     def getTrades(self, key):
         hash_key = key+self.hash_postfix+'Trade'
