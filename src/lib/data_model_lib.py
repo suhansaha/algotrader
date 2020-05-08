@@ -1,10 +1,38 @@
 import pandas as pd
 import numpy as np
 from redis import Redis
-from datetime import datetime
+from datetime import datetime, timedelta
 from lib.logging_lib import pdebug, pdebug1, pdebug5, perror, pinfo
 
 userid = 'suhan'
+
+       
+to_tick = lambda df, delta: pd.DataFrame( data = df.values, index =  df.index+timedelta(seconds=delta), columns=['ltp']  )
+def ohlc_to_tick(df):
+    ohlc_df = pd.DataFrame()
+    #pinfo(df)
+    tmp_df = to_tick(df['open'], 1)
+    ohlc_df = ohlc_df.append(tmp_df)
+    tmp_df = to_tick(df['close'], 50)
+    ohlc_df = ohlc_df.append(tmp_df)
+    tmp_df = to_tick(df['high'], 10)
+    ohlc_df = ohlc_df.append(tmp_df)
+    tmp_df = to_tick(df['low'], 20)
+    ohlc_df = ohlc_df.append(tmp_df)
+
+    #pinfo(ohlc_df)
+    return ohlc_df
+
+def resample(df, freq = '1T'):
+    tmp_df = pd.DataFrame()
+
+    tmp_df['close'] = df.resample(freq,label='right', closed='right').last()
+    tmp_df['high'] = df.resample(freq,label='right', closed='right').max()
+    tmp_df['low'] = df.resample(freq,label='right', closed='right').min()
+    tmp_df['open'] = df.resample(freq,label='right', closed='right').first()
+    
+    return tmp_df
+
 
 # Wrapper for Redis cache
 class cache_state(Redis):
@@ -24,10 +52,20 @@ class cache_state(Redis):
             # Amount: -ve for Buy, +ve for sale; W_L: +1 for Win, -1 for Loss; Mode: EN|EX|SL|TP|F
             self.set(hash_key+'Trade', pd.DataFrame().to_json(orient='columns'))
             self.set(hash_key+'OHLC', pd.DataFrame().to_json(orient='columns'))
+            self.set(hash_key+'TICK', pd.DataFrame().to_json(orient='columns'))
         self.sadd(self.hash_postfix, key)
 
         pinfo('{}=>{}'.format(hash_key, self.hgetall(hash_key)))
-        
+ 
+    
+    def pushCache(self, hash_key, df):
+        cache_buff = pd.read_json(self.get(hash_key))
+        cache_buff = cache_buff.append(df)
+        self.setCache(hash_key, cache_buff)
+    
+    def setCache(self, hash_key, df):
+        self.set(hash_key, df.to_json(orient='columns'))
+
     def getTrades(self, key):
         hash_key = key+self.hash_postfix+'Trade'
         df = pd.read_json(self.get(hash_key))
@@ -35,27 +73,22 @@ class cache_state(Redis):
     
     def pushTrade(self, key, df):
         hash_key = key+self.hash_postfix+'Trade'
-        cache_buff = pd.read_json(self.get(hash_key))
-        cache_buff = cache_buff.append(df)
-        self.set(hash_key, cache_buff.to_json(orient='columns'))
+        self.pushCache(hash_key, df)
 
     def getOHLC(self, key):
         hash_key = key+self.hash_postfix+'OHLC'
         df = pd.read_json(self.get(hash_key))
         return df
-
+    
     def setOHLC(self, key, df):
-        hash_key = key+self.hash_postfix+'OHLC'
-        self.set(hash_key, df.to_json(orient='columns'))
+        # Overwrites existing content
+        self.setCache(key+self.hash_postfix+'OHLC', df)
+        self.setCache(key+self.hash_postfix+'TICK', ohlc_to_tick(df))
         return df
 
     def pushOHLC(self, key, df):
-        hash_key = key+self.hash_postfix+'OHLC'
-        cache_buff = pd.read_json(self.get(hash_key))
-        cache_buff = cache_buff.append(df)
-        
-        #pinfo("CB: {}=>{}".format(hash_key, cache_buff.shape))
-        self.set(hash_key, cache_buff.to_json(orient='columns'))
+        self.pushCache(key+self.hash_postfix+'OHLC', df)
+        self.pushCache(key+self.hash_postfix+'TICK', ohlc_to_tick(df))
         
     def getValue(self, key='', field=''):
         hash_key = key+self.hash_postfix
