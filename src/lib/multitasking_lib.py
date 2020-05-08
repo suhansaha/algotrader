@@ -248,7 +248,7 @@ def trade_init(stock_key, algo, freq, qty, sl, target):
 
 
 max_simu_msg = 300
-simulator_sem = Semaphore(max_simu_msg)
+ohlc_handler_sem = Semaphore(max_simu_msg)
 def kite_simulator(manager, msg):
     pdebug('kite_simulator: {}'.format(msg))
 
@@ -290,7 +290,7 @@ def kite_simulator(manager, msg):
         i = int(i)
 
         for stock in  data['stock']:
-            simulator_sem.acquire()
+            ohlc_handler_sem.acquire()
             row = ohlc_data[stock].iloc[i]
             index = ohlc_data[stock].index[i]
         
@@ -306,30 +306,24 @@ def kite_simulator(manager, msg):
             #if counter % 500 == 0:
             #    pinfo('Kite simulator is on a short break')
             #    time.sleep(2)
-            
-
-    #for stock in  data['stock']:
-    #    cache.set(stock, ohlc_data[stock].to_json(orient='columns'))
-    
+                
     pinfo('Kite_Simulator: Done: {}'.format(counter))
 
-    time.sleep(1)
+    #time.sleep(1)
     notification_despatcher(None, 'done')
-    
-    simulator_lock.acquire()
 
-    pdebug('Kite_Simulator: Trade Handler Done')
+    #pdebug('Kite_Simulator: Trade Handler Done')
 
-    cache.set('done'+cache_postfix,1)
-    for key in data['stock']:
-        pdebug1(key)
-        try:
-            trade_analysis(key)
-        except:
-            perror("Exception in trade analysis")
-            pass
+    #cache.set('done'+cache_postfix,1)
+    #for key in data['stock']:
+    #    pdebug1(key)
+    #    try:
+    #        trade_analysis(key)
+    #    except:
+    #        perror("Exception in trade analysis")
+    #        pass
     
-    pdebug('Kite_Simulator: Trade Analysis Done')
+    #pdebug('Kite_Simulator: Trade Analysis Done')
 
 
 #def update_plot_cache(key, tmp_df):
@@ -344,8 +338,6 @@ def ohlc_tick_handler(manager, msg):
     # Step 0: Clean queue
     cache.xtrim('msgBufferQueue'+cache_postfix,maxlen=0, approximate=False)
     cache.xtrim('notificationQueue'+cache_postfix,maxlen=0, approximate=False)
-
-    simulator_lock.acquire()
      
     counter = 0
     while(True):
@@ -361,13 +353,13 @@ def ohlc_tick_handler(manager, msg):
         
         # Step 3: Process tick: Start a worker thread for each msg       
         for msg in msgs_q[0][1]:
-            pdebug1('ohlc_tick_handler: {}'.format(msg[1]['msg']))
+            pdebug1('ohlc_tick_handler: {}'.format(msg[1]))
             counter = counter + 1
             try:
                 data = json.loads(msg[1]['msg'])
             except:
-                simulator_lock.release()
                 perror("Un-supported message: {}: {} : {}".format(counter, msg, sys.exc_info()[0]))
+                cache.set('done'+cache_postfix,1)
                 counter = 0
                 break
             
@@ -398,7 +390,7 @@ def ohlc_tick_handler(manager, msg):
             cache.pushOHLC(hash_key,temp_df)
 
             # Start job to process Tick
-            simulator_sem.release()
+            ohlc_handler_sem.release()
             trade_job_sem.acquire()
             manager.add(stock, trade_job, False, hash_key)
             #pdebug(msg[0])
@@ -591,6 +583,9 @@ def placeorder(prefix, df, stock, last_processed):
     cache.pushTrade(stock, tmp_df)
 
 
+def tick_resampler(manager, msg):
+    pdebug('tick_resampler: {}'.format(msg))
+
 def order_handler(manager, msg):
     pdebug('order_handler: {}'.format(msg))
     
@@ -625,38 +620,19 @@ def freedom_init(manager, msg):
     job_alive = lambda x: pinfo("backtest_manager: {}".format(x.job.is_alive()))
     # 0: Initialize settings
 
-    if msg == 'backtest:start':
-        cache.set('done'+cache_type,1)
-        backtest_manager = threadManager(cache_type, ["kite_simulator","ohlc_tick_handler"], [kite_simulator, ohlc_tick_handler])
-    elif msg == 'backtest:stop':
-        job_alive(backtest_manager)
-        backtest_manager.job.terminate()
-        time.sleep(3)
-        job_alive(backtest_manager)
-    elif msg == 'backtest:status':
-        job_alive(backtest_manager)
-    elif msg == 'backtest:reset':
-        backtest_manager.job.terminate()
-        time.sleep(2)
-        job_alive(backtest_manager)
-        backtest_manager = threadManager(cache_type, ["kite_simulator","ohlc_tick_handler"], [kite_simulator, ohlc_tick_handler])
-        time.sleep(3)
-        job_alive(backtest_manager)
-        cache.set('done'+cache_type,1)
-    elif msg == 'live:start':
-        live_trade_manager = threadManager("live", ["order_handler"], [order_handler])
-    else:
-        cache.set('done'+cache_type,1)
-        backtest_manager = threadManager(cache_type, ["kite_simulator","ohlc_tick_handler"], [kite_simulator, ohlc_tick_handler])
+    cache.set('done'+cache_type,1)
+    backtest_manager = threadManager(cache_type, ["kite_simulator","ohlc_tick_handler"], [kite_simulator, ohlc_tick_handler])
 
-        # 2: Start kite websocket connections
-        # Initialise
-        #kws = KiteTicker(KiteAPIKey, kite.access_token)
+    live_manager = threadManager(cache_id, ["ohlc_tick_handler","tick_resampler","order_handler"], [ohlc_tick_handler, tick_resampler, order_handler])
 
-        # Assign the callbacks.
-        #kws.on_ticks = on_ticks
-        #kws.on_connect = on_connect
-        #kws.on_order_update = on_order_update
+    # 2: Start kite websocket connections
+    # Initialise
+    #kws = KiteTicker(KiteAPIKey, kite.access_token)
+
+    # Assign the callbacks.
+    #kws.on_ticks = on_ticks
+    #kws.on_connect = on_connect
+    #kws.on_order_update = on_order_update
     
 #TODO: Watchdog implementation to resume processes
 #TODO: Implementation of user initiated aborts and restart

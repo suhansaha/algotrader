@@ -48,6 +48,7 @@ pexception = lambda x: logger.critical(x)
 pwarning = lambda x: logger.warning(x)
 
 cache_type = "backtest_web"
+cache_id = 'live'
 redis_conn = Redis(host='redis', port=6379, db=0, charset="utf-8", decode_responses=True)
 #def logtrade(x):
 #    global cache_type
