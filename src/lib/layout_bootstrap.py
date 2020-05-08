@@ -62,7 +62,7 @@ algo_input = html.Div(dbc.FormGroup([dbc.InputGroup([dbc.InputGroupAddon(dcc.Dro
 # The form to enter backtest details
 cal_end_date = temp_file.get('/minute/NSE/WIPRO').index[-1].strftime("%Y-%m-%d")
 cal_start_date = (temp_file.get('/minute/NSE/WIPRO').index[-1] - timedelta(days=10)).strftime("%Y-%m-%d")
-freq_options = [{'label':'day', 'value':'day'},{'label':'1min', 'value':'1min'},{'label':'5min', 'value':'5min','disabled':True},{'label':'10min', 'value':'10min','disabled':True},{'label':'15min', 'value':'15min','disabled':True}]
+freq_options = [{'label':'day', 'value':'1D'},{'label':'1min', 'value':'1T'},{'label':'5min', 'value':'5T','disabled':True},{'label':'10min', 'value':'10T','disabled':True},{'label':'15min', 'value':'15T','disabled':True}]
 stock_options = pd.DataFrame({'label':df['Symbol'],'value':df['Symbol']}).to_dict(orient='records')
 
 form_div = html.Div([
@@ -72,7 +72,7 @@ form_div = html.Div([
                 dbc.Col(dbc.InputGroup([ dbc.InputGroupAddon("SL", addon_type="prepend"),dbc.Input(id="input-sl", placeholder="0.0", value=1),dbc.InputGroupAddon("%", addon_type="append") ], size="sm"),width=2),
                 dbc.Col(dbc.InputGroup([ dbc.InputGroupAddon("TP", addon_type="prepend"),dbc.Input(id="input-target", placeholder="0.0", value=1),dbc.InputGroupAddon("%", addon_type="append") ], size="sm"),width=2),
                 dbc.Col( dbc.InputGroup([ dcc.DatePickerRange( id='date-picker-range', end_date=cal_end_date, start_date=cal_start_date),
-                                            dbc.Select(id='freq', value='day', options=freq_options )], size="sm"), width=6, sm='12', md=5),
+                                            dbc.Select(id='freq', value='1D', options=freq_options )], size="sm"), width=6, sm='12', md=5),
                 dbc.Col(dbc.Button('Go', id='button', color="success", disabled=True, size='sm'),width=1)
             ], no_gutters=True),
         ])

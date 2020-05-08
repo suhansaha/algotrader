@@ -53,7 +53,7 @@ def myalgo(cache, key, ohlc_data_df, algo='', state='SCANNING'):
     CLOSE = ohlc_data_temp['close']
     HIGH = ohlc_data_temp['high']
     LOW = ohlc_data_temp['low']
-    VOLUME = ohlc_data_temp['volume']
+    #VOLUME = ohlc_data_temp['volume']
     
     (haOPEN, haHIGH, haLOW, haCLOSE) = HAIKINASI(ohlc_data_temp)
 

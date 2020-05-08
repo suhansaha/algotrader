@@ -121,9 +121,9 @@ def render_charts(data, trade, symbol, chart_type='haikin'):
         #price['buy'] = []
         #price['sell'] = []
         freq = redis_conn.hget(symbol+cache_type, 'freq')
-        toffset = 1.05
-        if freq == "minute":
-            toffset = 1.005
+        toffset = 1.005
+        if freq == "1D":
+            toffset = 1.1
 
         if 'buy' in trade:
             price['buy'] = trade['buy']
@@ -155,5 +155,8 @@ def freedom_chart(symbol, chart_type='haikin'):
     trade_df = pd.read_json(redis_conn.get(symbol+cache_type+'Trade'), orient='columns')
 
     trade_df = trade_df.tail(500) # safety for algo on longer durations
+    dfohlc = dfohlc.tail(500)
+
+    #pinfo(trade_df)
 
     return render_charts(dfohlc, trade_df, symbol, chart_type)

@@ -189,9 +189,9 @@ def msg_to_ohlc(data):
     slow = ohlc_list['low']
     sopen = ohlc_list['open']
     sclose = ohlc_list['close']
-    svolume = ohlc_list['volume']
+    #svolume = ohlc_list['volume']
 
-    temp_df = pd.DataFrame(ohlc_list, columns=['open','high','low','close','volume'], 
+    temp_df = pd.DataFrame(ohlc_list, columns=['open','high','low','close'], 
                            index=[datetime.strptime(ohlc_list['date'],'%Y-%m-%d %H:%M:%S')])
     
     return temp_df
@@ -227,7 +227,7 @@ def notification_despatcher(ws, msg, Tick=True ):
 
 trade_lock_store = {} 
 simulator_lock = Lock()
-def trade_init(stock_key, algo, freq, qty, sl, target):        
+def trade_init(stock_key, algo, freq, qty, sl, target, hdf_freq):        
     # Initialize state
     pdebug("Trade_init: {}".format(stock_key))
 
@@ -241,6 +241,7 @@ def trade_init(stock_key, algo, freq, qty, sl, target):
     cache.setValue(stock_key, 'P&L', 0)
     cache.setValue(stock_key, 'Total P&L', 0)
     cache.setValue(stock_key, 'price', 0)
+    cache.setValue(stock_key, 'hdf_freq', hdf_freq)
 
     #cache.set(stock_key, pd.DataFrame().to_json(orient='columns')) #Used for plotting
     
@@ -269,15 +270,19 @@ def kite_simulator(manager, msg):
     exchange = 'NSE'
     freq = data['freq']
     algo = data['algo']
-    if not freq == 'day':
-        freq='minute'
+
+    if freq == '1D':
+        hdf_freq='day'
+    else:
+        hdf_freq='minute'
 
     ohlc_data = {}
     for stock_key in data['stock']: #Initialize
         # Load data from the Cache
-        df = getData(stock_key, startDate, toDate, exchange, freq, False, stock_key)
+        #cache.setValue(stock_key, 'hdf_freq', hdf_freq)        
+        df = getData(stock_key, startDate, toDate, exchange, hdf_freq, False, stock_key)
         ohlc_data[stock_key] = df
-        trade_init(stock_key, algo, freq, qty, sl, target)
+        trade_init(stock_key, algo, freq, qty, sl, target, hdf_freq)
 
     cache.publish('ohlc_tick_handler'+cache_postfix,'start')
 
@@ -368,18 +373,18 @@ def ohlc_tick_handler(manager, msg):
                 exchange = key.split(':')[0]
 
             hash_key = stock
-            freq = cache.getValue(hash_key,'freq')
+            hdf_freq = cache.getValue(hash_key,'hdf_freq')
             state = cache.getValue(hash_key,'state')
 
             #pdebug('TH: {} =>{}'.format(hash_key, state))
             temp_df = msg_to_ohlc(data)
             if state == 'INIT': # State: Init: Load historical data from cache
                 # 1: Populate Redis buffer stock+"OHLCBuffer" with historical data
-                deltaT = getDeltaT(freq)
+                deltaT = getDeltaT(hdf_freq)
 
                 toDate = (temp_df.index[0] - timedelta(days=1)).strftime('%Y-%m-%d')
                 fromDate = (temp_df.index[0] - deltaT).strftime('%Y-%m-%d')
-                ohlc_data = getData(stock, fromDate, toDate, exchange, freq, False, stock)
+                ohlc_data = getData(stock, fromDate, toDate, exchange, hdf_freq, False, stock)
 
                 ohlc_data = ohlc_data.tail(no_of_hist_candles)
                 cache.setOHLC(hash_key,ohlc_data)

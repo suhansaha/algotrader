@@ -24,13 +24,17 @@ def ohlc_to_tick(df):
     return ohlc_df
 
 def resample(df, freq = '1T'):
+
+    #pinfo(freq)
+    #pinfo(df.head(5))
     tmp_df = pd.DataFrame()
 
-    tmp_df['close'] = df.resample(freq,label='right', closed='right').last()
-    tmp_df['high'] = df.resample(freq,label='right', closed='right').max()
-    tmp_df['low'] = df.resample(freq,label='right', closed='right').min()
-    tmp_df['open'] = df.resample(freq,label='right', closed='right').first()
+    tmp_df['close'] = df.resample(freq,label='left', closed='right').last().dropna()
+    tmp_df['high'] = df.resample(freq,label='left', closed='right').max().dropna()
+    tmp_df['low'] = df.resample(freq,label='left', closed='right').min().dropna()
+    tmp_df['open'] = df.resample(freq,label='left', closed='right').first().dropna()
     
+    #pinfo(tmp_df.head())
     return tmp_df
 
 
@@ -47,7 +51,7 @@ class cache_state(Redis):
         if self.hlen(hash_key) == 0 or reset == True:
             self.hmset(hash_key, {'stock':key, 'qty':0, 'SL %':0.0, 'TP %':0.0, 'amount':0,'price':0.0,'P&L':0.0,'P&L %':0.0,'Total P&L':0.0,'Total P&L %':0.0,
                                        'low':0.0,'sl':0.0,'ltp':0.0,'ltp %':0.0,'tp':0.0,'high':0.0,'last_processed':'1999-01-01',
-                                       'state':'INIT','mode':'PAUSE','algo':'', 'freq':'day','hdf_freq':'day'})
+                                       'state':'INIT','mode':'PAUSE','algo':'', 'freq':'1D','hdf_freq':'day'})
             # Trade Log: [{timestamp, buy, sale, amount, profit, cum_profit, W_L, Mode}]
             # Amount: -ve for Buy, +ve for sale; W_L: +1 for Win, -1 for Loss; Mode: EN|EX|SL|TP|F
             self.set(hash_key+'Trade', pd.DataFrame().to_json(orient='columns'))
@@ -75,10 +79,21 @@ class cache_state(Redis):
         hash_key = key+self.hash_postfix+'Trade'
         self.pushCache(hash_key, df)
 
-    def getOHLC(self, key):
+    def getOHLC(self, key, freq='1D'):
+        freq = self.getValue(key, 'freq')
+        if freq != '1D':
+            freq= '1T'
+        #pinfo(freq)
+
         hash_key = key+self.hash_postfix+'OHLC'
+        hash_key1 = key+self.hash_postfix+'TICK'
         df = pd.read_json(self.get(hash_key))
-        return df
+        df1 =  pd.read_json(self.get(hash_key1))
+        #pinfo(df1['ltp'].head())
+        #return resample(df['ltp'], freq)
+        resample_df = resample(df1['ltp'], freq)
+        #pinfo(resample_df.head())
+        return resample_df
     
     def setOHLC(self, key, df):
         # Overwrites existing content
