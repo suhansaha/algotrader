@@ -44,7 +44,9 @@ def order_details(cache, key, decision = 'WAIT', x2 = -1, qty=-1, sl=-1, tp=-1):
 
 def myalgo(cache, key, ohlc_data_df, algo='', state='SCANNING'): 
     #pdebug(ohlc_data_df.shape)
-    ohlc_data_temp = ohlc_data_df.tail(30)
+    ohlc_data_temp = ohlc_data_df.tail(31).head(30)
+
+    #pinfo(ohlc_data_temp)
     
     if ohlc_data_temp.shape[0] < 30:
         return 'WAIT'
@@ -74,7 +76,6 @@ def myalgo(cache, key, ohlc_data_df, algo='', state='SCANNING'):
             exec(code)
         except:
             perror("Error in executing algorithm")
-            pass
     else:
         if (REF(haCLOSE,2) < REF(haOPEN,2)) and (REF(haCLOSE,1) < REF(haOPEN,1)) and (REF(haCLOSE,0) > REF(haOPEN,0)): 
             BUY()

@@ -24,17 +24,10 @@ def ohlc_to_tick(df):
     return ohlc_df
 
 def resample(df, freq = '1T'):
-
-    #pinfo(freq)
-    #pinfo(df.head(5))
-    tmp_df = pd.DataFrame()
-
-    tmp_df['close'] = df.resample(freq,label='left', closed='right').last().dropna()
-    tmp_df['high'] = df.resample(freq,label='left', closed='right').max().dropna()
-    tmp_df['low'] = df.resample(freq,label='left', closed='right').min().dropna()
-    tmp_df['open'] = df.resample(freq,label='left', closed='right').first().dropna()
-    
-    #pinfo(tmp_df.head())
+    tmp_df = pd.DataFrame()    
+    tmp_df = df.resample(freq,label='left').agg(['last','max','min','first']).dropna()
+    tmp_df.columns = ['close', 'high', 'low', 'open']
+    #print(tmp_df.head(5))
     return tmp_df
 
 
@@ -99,6 +92,11 @@ class cache_state(Redis):
         # Overwrites existing content
         self.setCache(key+self.hash_postfix+'OHLC', df)
         self.setCache(key+self.hash_postfix+'TICK', ohlc_to_tick(df))
+        return df
+
+    def pushTICK(self, key, df):
+        #pdebug1("{}=>{}".format(key,df))
+        self.pushCache(key+self.hash_postfix+'TICK', df)
         return df
 
     def pushOHLC(self, key, df):

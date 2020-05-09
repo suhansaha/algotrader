@@ -78,6 +78,7 @@ class threadManager():
         global cache_postfix, cache
         cache_postfix = self.name
         cache = cache_state(cache_postfix)
+        #cache.flushall()
         # Create new threads
         for tName in self.threadList:
             self.add(tName, self.threadCallback[self.threadID-1])
@@ -198,20 +199,20 @@ def msg_to_ohlc(data):
 
 
 # This function is called by Kite or Kite_Simulation
-def notification_despatcher(ws, msg, Tick=True ):
-    pdebug1('notification_despatcher: {}'.format(msg))
+def notification_despatcher(ws, msg, id='*', Tick=True ):
+    pdebug1('notification_despatcher:{}=>{}'.format(id,msg))
     # Step 1: Extract msg type: Tick/Callbacks
     
     # Step 2.1: If Tick
     if Tick == True:
         # Push msg to msgBufferQueue
-        msg_id = cache.xadd('msgBufferQueue'+cache_postfix,{'msg': msg})
-        pdebug1("Despatcher: {}".format(msg_id))
+        #msg_id = cache.xadd('msgBufferQueue'+cache_postfix, msg, id=id)
+        msg_id = cache.xadd('msgBufferQueue'+cache_postfix, {'data':json.dumps(msg)}, id=id)
     
     # Step 2.2: else
     else:
         # Push msg to notificationQueue
-        cache.xadd('notificationQueue'+cache_postfix,{'msg': msg})
+        cache.xadd('notificationQueue'+cache_postfix, msg, id = id)
 
 ###################### BackTest ######################
 '''
@@ -291,58 +292,56 @@ def kite_simulator(manager, msg):
     stock = data['stock'][-1]
     no = ohlc_data[stock].shape[0]
     counter = 0
+    stream_id = lambda x,y:str(int(x.timestamp()+y)*1000)+'-0'
+    cache.delete('msgBufferQueue'+cache_postfix)
+    cache.delete('notificationQueue'+cache_postfix)
     for i in np.linspace(0,no-1,no): # Push data
         i = int(i)
-
-        for stock in  data['stock']:
-            ohlc_handler_sem.acquire()
+        msg_dict_open = {}
+        msg_dict_high = {}
+        msg_dict_low = {}
+        msg_dict_close = {}
+        for stock in data['stock']:
             row = ohlc_data[stock].iloc[i]
             index = ohlc_data[stock].index[i]
-        
-            # Construct Json message like Kite
-            mydate = "{}-{}-{} {}:{}:{}".format(index.year,index.month,index.day, index.hour, index.minute, index.second)        
-            msg = {exchange+":"+stock:{"ohlc":{'date':mydate,'open':row['open'],'high':row['high'],'low':row['low'],'close':row['close'],'volume':row['volume']}}}
-            pdebug1(msg)
-            msg = json.dumps(msg)
             
-            # Call notification_despatcher
-            notification_despatcher(None, msg)
-            counter = counter + 1
-            #if counter % 500 == 0:
-            #    pinfo('Kite simulator is on a short break')
-            #    time.sleep(2)
-                
+            #stream_id = str(int(index.timestamp())*1000)+'-0'
+            msg = {exchange+":"+stock:json.dumps({"last_price":row['open']})}
+            msg_dict_open.update(msg)
+            
+            #stream_id = str(int(index.timestamp())*1000)+'-0'
+            msg = {exchange+":"+stock:json.dumps({"last_price":row['high']})}
+            msg_dict_high.update(msg)
+            
+            #stream_id = str(int(index.timestamp())*1000)+'-0'
+            msg = {exchange+":"+stock:json.dumps({"last_price":row['low']})}
+            msg_dict_low.update(msg)
+            
+            #stream_id = str(int(index.timestamp())*1000)+'-0'
+            msg = {exchange+":"+stock:json.dumps({"last_price":row['close']})}
+            msg_dict_close.update(msg)
+            
+        
+        notification_despatcher(None, msg_dict_open, id=stream_id(index,5))
+        notification_despatcher(None, msg_dict_high, id=stream_id(index,10))
+        notification_despatcher(None, msg_dict_low, id=stream_id(index,20))
+        notification_despatcher(None, msg_dict_close, id=stream_id(index,30))
+
+        counter = counter + 4
+            
     pinfo('Kite_Simulator: Done: {}'.format(counter))
 
-    #time.sleep(1)
     notification_despatcher(None, 'done')
 
-    #pdebug('Kite_Simulator: Trade Handler Done')
 
-    #cache.set('done'+cache_postfix,1)
-    #for key in data['stock']:
-    #    pdebug1(key)
-    #    try:
-    #        trade_analysis(key)
-    #    except:
-    #        perror("Exception in trade analysis")
-    #        pass
-    
-    #pdebug('Kite_Simulator: Trade Analysis Done')
-
-
-#def update_plot_cache(key, tmp_df):
-#    cache_buff = pd.read_json(cache.get(key))
-#    cache_buff = cache_buff.append(tmp_df)
-#    cache.set(key, cache_buff.to_json(orient='columns'))
 
 trade_job_sem = Semaphore(10)
 def ohlc_tick_handler(manager, msg):
-    pinfo('ohlc_tick_handler: {}'.format(msg))
+    pdebug1('ohlc_tick_handler: {}'.format(msg))
 
     # Step 0: Clean queue
-    cache.xtrim('msgBufferQueue'+cache_postfix,maxlen=0, approximate=False)
-    cache.xtrim('notificationQueue'+cache_postfix,maxlen=0, approximate=False)
+    cache.delete('msgBufferQueue'+cache_postfix)
+    cache.delete('notificationQueue'+cache_postfix)
      
     counter = 0
     while(True):
@@ -358,47 +357,61 @@ def ohlc_tick_handler(manager, msg):
         
         # Step 3: Process tick: Start a worker thread for each msg       
         for msg in msgs_q[0][1]:
-            pdebug1('ohlc_tick_handler: {}'.format(msg[1]))
+            #pdebug('ohlc_tick_handler: {}'.format(msg[1]))
             counter = counter + 1
-            try:
-                data = json.loads(msg[1]['msg'])
-            except:
-                perror("Un-supported message: {}: {} : {}".format(counter, msg, sys.exc_info()[0]))
+
+            val = json.loads(msg[1]['data'])
+            if val == 'done':
+                perror("Un-supported message: {}: {}".format(counter, msg))
                 cache.set('done'+cache_postfix,1)
                 counter = 0
                 break
             
-            for key in data.keys():
-                stock = key.split(':')[1]
-                exchange = key.split(':')[0]
-
-            hash_key = stock
-            hdf_freq = cache.getValue(hash_key,'hdf_freq')
-            state = cache.getValue(hash_key,'state')
-
-            #pdebug('TH: {} =>{}'.format(hash_key, state))
-            temp_df = msg_to_ohlc(data)
-            if state == 'INIT': # State: Init: Load historical data from cache
-                # 1: Populate Redis buffer stock+"OHLCBuffer" with historical data
-                deltaT = getDeltaT(hdf_freq)
-
-                toDate = (temp_df.index[0] - timedelta(days=1)).strftime('%Y-%m-%d')
-                fromDate = (temp_df.index[0] - deltaT).strftime('%Y-%m-%d')
-                ohlc_data = getData(stock, fromDate, toDate, exchange, hdf_freq, False, stock)
-
-                ohlc_data = ohlc_data.tail(no_of_hist_candles)
-                cache.setOHLC(hash_key,ohlc_data)
-
-                #cache.setValue(hash_key,'state','SCANNING')
             
-            # Add to OHLCBuffer in hash
-            cache.pushOHLC(hash_key,temp_df)
+            date_val = datetime.fromtimestamp(int(msg[0].split('-')[0])/1000).strftime('%Y-%m-%d %H:%M:%S')
 
-            # Start job to process Tick
-            ohlc_handler_sem.release()
-            trade_job_sem.acquire()
-            manager.add(stock, trade_job, False, hash_key)
-            #pdebug(msg[0])
+            #stock = []
+            #ltp = []
+            #date = []
+            for key, data in val.items():
+                stock_id = key.split(':')[1]
+                exchange = key.split(':')[0]
+                ltp = json.loads(data)['last_price']
+                temp_df = pd.DataFrame(data={'date':[date_val],'ltp':[ltp]})
+                temp_df = temp_df.set_index('date')
+                temp_df.index = pd.to_datetime(temp_df.index)
+
+
+                hash_key = stock_id
+                hdf_freq = cache.getValue(hash_key,'hdf_freq')
+                state = cache.getValue(hash_key,'state')
+
+                #pdebug('TH: {} =>{}'.format(hash_key, state))
+                #temp_df = msg_to_ohlc(data)
+                if state == 'INIT': # State: Init: Load historical data from cache
+                    # 1: Populate Redis buffer stock+"OHLCBuffer" with historical data
+                    deltaT = getDeltaT(hdf_freq)
+
+                    toDate = (temp_df.index[0] - timedelta(days=1)).strftime('%Y-%m-%d')
+                    fromDate = (temp_df.index[0] - deltaT).strftime('%Y-%m-%d')
+                    ohlc_data = getData(stock_id, fromDate, toDate, exchange, hdf_freq, False, stock_id)
+
+                    ohlc_data = ohlc_data.tail(no_of_hist_candles)
+                    cache.setOHLC(hash_key,ohlc_data)
+
+                    cache.setValue(hash_key,'state','SCANNING')
+
+
+                cache.pushTICK(stock_id, temp_df)
+                
+                # Add to OHLCBuffer in hash
+                #cache.pushOHLC(hash_key,temp_df)
+
+                # Start job to process Tick
+                ohlc_handler_sem.release()
+                trade_job_sem.acquire()
+                manager.add(stock_id, trade_job, False, hash_key)
+                #pdebug(msg[0])
 
 def trade_job(hash_key):
     pdebug1('trade_job: {}'.format(hash_key))
