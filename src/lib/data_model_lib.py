@@ -74,8 +74,8 @@ class cache_state(Redis):
 
     def getOHLC(self, key, freq='1D'):
         freq = self.getValue(key, 'freq')
-        if freq != '1D':
-            freq= '1T'
+        #if freq != '1D':
+        #    freq= '1T'
         #pinfo(freq)
 
         hash_key = key+self.hash_postfix+'OHLC'

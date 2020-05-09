@@ -62,7 +62,7 @@ algo_input = html.Div(dbc.FormGroup([dbc.InputGroup([dbc.InputGroupAddon(dcc.Dro
 # The form to enter backtest details
 cal_end_date = temp_file.get('/minute/NSE/WIPRO').index[-1].strftime("%Y-%m-%d")
 cal_start_date = (temp_file.get('/minute/NSE/WIPRO').index[-1] - timedelta(days=10)).strftime("%Y-%m-%d")
-freq_options = [{'label':'day', 'value':'1D'},{'label':'1min', 'value':'1T'},{'label':'5min', 'value':'5T','disabled':True},{'label':'10min', 'value':'10T','disabled':True},{'label':'15min', 'value':'15T','disabled':True}]
+freq_options = [{'label':'day', 'value':'1D'},{'label':'1min', 'value':'1T'},{'label':'3min', 'value':'3T','disabled':False},{'label':'5min', 'value':'5T','disabled':False},{'label':'10min', 'value':'10T','disabled':False},{'label':'15min', 'value':'15T','disabled':False}]
 stock_options = pd.DataFrame({'label':df['Symbol'],'value':df['Symbol']}).to_dict(orient='records')
 
 form_div = html.Div([

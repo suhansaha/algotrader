@@ -186,15 +186,7 @@ def console_cmd(n_clicks, n_submit, cmd ):
     
     return console_log
 
-#@dash_app.callback(
-#    Output('table-editing-simple', 'data'),
-#    [Input('stock_picker_live', 'value')])
-#def update_live_table(value ):
-#    live_cache = cache_state('live')
-#    for stock in value:
-#        pinfo(stock)
-        #live_cache.add(stock)
-#        return df_to_table(live_cache.getValue(), 'table-editing-simple', True)
+
 
 @dash_app.callback(
     [Output('table-editing-simple', 'data'),

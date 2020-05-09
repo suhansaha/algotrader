@@ -78,6 +78,9 @@ def render_charts(data, trade, symbol, chart_type='haikin'):
     yMin = data.iloc[-1*range_min:-1]['low'].min()-10
     yMax = data.iloc[-1*range_min:-1]['high'].max()
 
+    tickDates=data.index
+    tickIndexes=data.index
+
     fig = make_subplots(rows=3, cols=1, shared_xaxes=True, row_width=[3,1,5], vertical_spacing = 0.01)
     fig['layout']={'xaxis':{'rangeselector': {'buttons': [{'count': 1, 'label': '1h', 'step': 'hour', 'stepmode': 'backward'},
                                             {'count': 2, 'label': '2h', 'step': 'hour', 'stepmode': 'backward'},
@@ -87,10 +90,10 @@ def render_charts(data, trade, symbol, chart_type='haikin'):
                                             {'count': 1, 'label': '1m', 'step': 'month', 'stepmode': 'backward'},
                                             {'count': 3, 'label': '3m', 'step': 'month', 'stepmode': 'backward'},
                                            # {'count': 6, 'label': '6m', 'step': 'month', 'stepmode': 'backward'},
-                                                {'step': 'all'}]},
+                                                {'step': 'all'}]},'rangebreaks':[{'pattern': 'hour', 'bounds': [16, 9]}, {'bounds': ['sat', 'mon']}],
                 'rangeslider': {'visible': False}, 'side': 'bottom', 'range':[xMin, xMax], 'constrain':'domain'}, 
-                'xaxis2': {'anchor': 'y2', 'domain': [0.0, 1.0], 'matches': 'x', 'showticklabels': False},
-                'xaxis3': {'anchor': 'y3', 'domain': [0.0, 1.0], 'matches': 'x', 'showticklabels': True},
+                'xaxis2': {'anchor': 'y2', 'domain': [0.0, 1.0], 'matches': 'x', 'showticklabels': False,'rangebreaks':[{'pattern': 'hour', 'bounds': [16, 9]}, {'bounds': ['sat', 'mon']}]},
+                'xaxis3': {'anchor': 'y3', 'domain': [0.0, 1.0], 'matches': 'x', 'showticklabels': True,'rangebreaks':[{'pattern': 'hour', 'bounds': [16, 9]}, {'bounds': ['sat', 'mon']}]},
                 'yaxis' : {'anchor': 'x', 'domain': [0.45, 1.0], 'side': 'right', 'linecolor':'black', 'ticks':'inside', 'range':[yMin, yMax]},
                 'yaxis2': {'anchor': 'x2', 'domain': [0.2, 0.43], 'side': 'right', 'linecolor':'black', 'ticks':'inside'},
                 'yaxis3': {'anchor': 'x3', 'domain': [0.0, 0.19], 'side': 'right', 'range':[0,100], 'tickvals':[0,30,70,100], 'ticks':'inside','gridcolor':'black', 'showgrid':True, 'linecolor':'black'},
@@ -160,7 +163,7 @@ def freedom_chart(symbol, cache_type, chart_type='haikin'):
     trade_df = pd.read_json(redis_conn.get(symbol+cache_type+'Trade'), orient='columns')
 
     trade_df = trade_df.tail(500) # safety for algo on longer durations
-    dfohlc = dfohlc.tail(500)
+    dfohlc = dfohlc.tail(2500)
 
     #pinfo(trade_df)
 

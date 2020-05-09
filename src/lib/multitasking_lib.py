@@ -321,10 +321,13 @@ def kite_simulator(manager, msg):
             msg = {exchange+":"+stock:json.dumps({"last_price":row['close']})}
             msg_dict_close.update(msg)
             
-        
+        ohlc_handler_sem.acquire()
         notification_despatcher(None, msg_dict_open, id=stream_id(index,5))
+        ohlc_handler_sem.acquire()
         notification_despatcher(None, msg_dict_high, id=stream_id(index,10))
+        ohlc_handler_sem.acquire()
         notification_despatcher(None, msg_dict_low, id=stream_id(index,20))
+        ohlc_handler_sem.acquire()
         notification_despatcher(None, msg_dict_close, id=stream_id(index,30))
 
         counter = counter + 4
@@ -342,16 +345,23 @@ def ohlc_tick_handler(manager, msg):
     # Step 0: Clean queue
     cache.delete('msgBufferQueue'+cache_postfix)
     cache.delete('notificationQueue'+cache_postfix)
+    last_id_msg = '0'
      
     counter = 0
     while(True):
         # Step 1: Blocking call to msgBufferQueue and notificationQueue
         if cache.xlen('msgBufferQueue'+cache_postfix) == 0:
-            msg_q = cache.xread({'msgBufferQueue'+cache_postfix:'$','notificationQueue'+cache_postfix:'$'}, block=0, count=5000)
-        msgs_q = cache.xread({'msgBufferQueue'+cache_postfix:'0','notificationQueue'+cache_postfix:'0'}, block=2000, count=5000)
-        cache.xtrim('msgBufferQueue'+cache_postfix,maxlen=0, approximate=False)
+            cache.xread({'msgBufferQueue'+cache_postfix:'$','notificationQueue'+cache_postfix:'$'}, block=0, count=5000)
+        msgs_q = cache.xread({'msgBufferQueue'+cache_postfix:last_id_msg,'notificationQueue'+cache_postfix:'0'}, block=2000, count=5000)
+        #cache.xtrim('msgBufferQueue'+cache_postfix,maxlen=0, approximate=False)
         cache.xtrim('notificationQueue'+cache_postfix,maxlen=0, approximate=False)
         
+        try:
+            last_id_msg = msgs_q[0][1][-1][0]
+        except:
+            break
+            pass
+        #pinfo(last_id_msg)
         # Step 2: Process notifications: Start a worker thread for each notification
         #TODO
         
@@ -365,6 +375,7 @@ def ohlc_tick_handler(manager, msg):
                 perror("Un-supported message: {}: {}".format(counter, msg))
                 cache.set('done'+cache_postfix,1)
                 counter = 0
+                ohlc_handler_sem.release()
                 break
             
             
@@ -408,10 +419,10 @@ def ohlc_tick_handler(manager, msg):
                 #cache.pushOHLC(hash_key,temp_df)
 
                 # Start job to process Tick
-                ohlc_handler_sem.release()
                 trade_job_sem.acquire()
                 manager.add(stock_id, trade_job, False, hash_key)
-                #pdebug(msg[0])
+
+            ohlc_handler_sem.release()
 
 def trade_job(hash_key):
     pdebug1('trade_job: {}'.format(hash_key))
