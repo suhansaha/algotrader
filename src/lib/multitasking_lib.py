@@ -337,8 +337,11 @@ def quick_backtest(data, ohlc_data, cache, exchange):
         hdf_freq = cache.getValue(stock_key, 'hdf_freq')
         deltaT = getDeltaT(hdf_freq)
         
-        toDate = temp_df.index[0].strftime('%Y-%m-%d')
+        toDate = temp_df.index[-1].strftime('%Y-%m-%d')
         fromDate = (temp_df.index[0] - deltaT).strftime('%Y-%m-%d')
+
+        pinfo(toDate)
+        pinfo(fromDate)
         pre_data = getData(stock_key, fromDate, toDate, exchange, hdf_freq, False, stock_key)
 
         cache.setOHLC(stock_key, pre_data)

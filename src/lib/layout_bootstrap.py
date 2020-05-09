@@ -78,7 +78,7 @@ form_div = html.Div([
                         options=[
                             {"label": "Quick", "value": 1},
                         ],
-                        value=[],
+                        value=[1],
                         id="switches-input",
                         switch=True,
                     ))
