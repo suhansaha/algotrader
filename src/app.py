@@ -29,18 +29,25 @@ def store_algo(algo, algo_name="default"):
     State('input-sl', 'value'),
     State('input-target', 'value'),
     State('date-picker-range', 'start_date'), State('date-picker-range', 'end_date'),
-    State('algo','value'), State('freq','value'), State('algo-name', 'value')])
-def start_backtest(n_clicks, stocks, qty, sl, target, start_date, end_date, algo, freq, algo_name ):
+    State('algo','value'), State('freq','value'), State('algo-name', 'value'), State('switches-input', 'value')])
+def start_backtest(n_clicks, stocks, qty, sl, target, start_date, end_date, algo, freq, algo_name, mode ):
     toDate = end_date
     fromDate = start_date
     
+    #pinfo(len(mode))
+
+    if len(mode) > 0:
+        backtest = 'quick'
+    else:
+        backtest = 'full'
+
     if not isinstance(stocks,list):
         stocks = [stocks]
 
     pdebug1(stocks)
     # Step 1: Create the msg for initiating backtest
     #pinfo(freq)
-    backtest_msg={'stock':stocks,'sl':sl,'target':target,'qty':qty,'algo':algo_name,'fromDate':fromDate,'toDate':toDate,'freq':freq}
+    backtest_msg={'stock':stocks,'sl':sl,'target':target,'qty':qty,'algo':algo_name,'fromDate':fromDate,'toDate':toDate,'freq':freq, 'mode':backtest}
 
     try:
         store_algo(algo, algo_name)

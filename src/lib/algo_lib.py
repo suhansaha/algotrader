@@ -88,9 +88,13 @@ def myalgo_old(cache, key, ohlc_data_df, algo='', state='SCANNING'):
     return decision #"BUY"|"SELL"
 
 
-def myalgo(cache, key, ohlc_data_df, algo='', state='SCANNING'): 
+def myalgo(cache, key, ohlc_data_df, algo='', state='SCANNING', quick=False): 
     #pdebug(ohlc_data_df.shape)
-    ohlc_data_temp = ohlc_data_df.tail(31).head(30)
+
+    if quick == False:
+        ohlc_data_temp = ohlc_data_df.tail(31).head(30)
+    else:
+        ohlc_data_temp = ohlc_data_df
 
     #pinfo(ohlc_data_temp)
     
@@ -130,6 +134,7 @@ def myalgo(cache, key, ohlc_data_df, algo='', state='SCANNING'):
             WAIT()
 
     if algo != '':
+
         postfix = "update_decision(buy, sell)"        
         
         code = algo + '\n'+ postfix
@@ -145,5 +150,8 @@ def myalgo(cache, key, ohlc_data_df, algo='', state='SCANNING'):
         update_decision(buy, sell)
     
     decision = redis_conn.get('decision'+cache_type)
-    #pinfo(decision)
-    return decision #"BUY"|"SELL"
+
+    if quick == False:
+        return decision #"BUY"|"SELL"
+    else:
+        return buy, sell

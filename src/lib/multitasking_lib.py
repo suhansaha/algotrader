@@ -228,11 +228,23 @@ def notification_despatcher(ws, msg, id='*', Tick=True ):
 
 trade_lock_store = {} 
 simulator_lock = Lock()
-def trade_init(stock_key, algo, freq, qty, sl, target, hdf_freq):        
+def trade_init(stock_key, data):        
     # Initialize state
     pdebug("Trade_init: {}".format(stock_key))
 
     cache.add(stock_key, reset=True)
+
+    algo = data['algo']
+    sl = data['sl']
+    target = data['target']
+    qty = data['qty']
+    freq = data['freq']
+    algo = data['algo']
+
+    if freq == '1D':
+        hdf_freq='day'
+    else:
+        hdf_freq='minute'
 
     cache.setValue(stock_key, 'algo', algo)
     cache.setValue(stock_key, 'freq', freq)
@@ -251,43 +263,8 @@ def trade_init(stock_key, algo, freq, qty, sl, target, hdf_freq):
 
 max_simu_msg = 100
 ohlc_handler_sem = Semaphore(max_simu_msg)
-def kite_simulator(manager, msg):
-    pdebug('kite_simulator: {}'.format(msg))
-
-    try:
-        data = json.loads(msg)
-    except:
-        perror('kite_simulator: Invalid msg: {}'.format(msg))
-        return
-    
-    toDate = data['toDate']
-    fromDate = data['fromDate']
-    algo = data['algo']
-    sl = data['sl']
-    target = data['target']
-    qty = data['qty']
-
-    startDate = datetime.strptime(fromDate,'%Y-%m-%d') 
-    exchange = 'NSE'
-    freq = data['freq']
-    algo = data['algo']
-
-    if freq == '1D':
-        hdf_freq='day'
-    else:
-        hdf_freq='minute'
-
-    ohlc_data = {}
-    for stock_key in data['stock']: #Initialize
-        # Load data from the Cache
-        #cache.setValue(stock_key, 'hdf_freq', hdf_freq)        
-        df = getData(stock_key, startDate, toDate, exchange, hdf_freq, False, stock_key)
-        ohlc_data[stock_key] = df
-        trade_init(stock_key, algo, freq, qty, sl, target, hdf_freq)
-
+def full_simulation(data, ohlc_data, cache, exchange):
     cache.publish('ohlc_tick_handler'+cache_postfix,'start')
-
-    #cache.set('logMsg'+cache_postfix,'Backtest Started: {} :\n'.format(stock)) # Used for displaying trade log
 
     stock = data['stock'][-1]
     no = ohlc_data[stock].shape[0]
@@ -335,6 +312,82 @@ def kite_simulator(manager, msg):
     pinfo('Kite_Simulator: Done: {}'.format(counter))
 
     notification_despatcher(None, 'done')
+
+
+def quick_backtest(data, ohlc_data, cache, exchange):
+    pinfo('quick backtest')
+
+    def BUY(CLOSE, x, trade_df1):
+        #global trade_df1
+        tmp_df = pd.DataFrame()
+        tmp_df["buy"] = CLOSE[x]
+        trade_df1 = trade_df1.append(tmp_df)
+        return trade_df1
+    
+    def SELL(CLOSE, x, trade_df1):
+        #global trade_df1
+        tmp_df = pd.DataFrame()
+        tmp_df["sell"] = CLOSE[x]
+        trade_df1 = trade_df1.append(tmp_df)
+        return trade_df1
+
+    for stock_key in data['stock']:
+        temp_df = ohlc_data[stock_key]
+        
+        hdf_freq = cache.getValue(stock_key, 'hdf_freq')
+        deltaT = getDeltaT(hdf_freq)
+        
+        toDate = temp_df.index[0].strftime('%Y-%m-%d')
+        fromDate = (temp_df.index[0] - deltaT).strftime('%Y-%m-%d')
+        pre_data = getData(stock_key, fromDate, toDate, exchange, hdf_freq, False, stock_key)
+
+        cache.setOHLC(stock_key, pre_data)
+
+        trade_df1 = pd.DataFrame()
+
+        buy, sell = myalgo(cache, stock_key, pre_data, algo='', state='SCANNING', quick=True)
+
+        #pinfo(pre_data['close'])
+        trade_df1 = SELL(pre_data['close'], sell, trade_df1)
+        trade_df1 = BUY(pre_data['close'], buy, trade_df1)
+
+        #pinfo(trade_df1.sort_index().tail(10))
+        cache.setCache(stock_key+cache_type+'Trade',trade_df1)
+    
+    cache.set('done'+cache_postfix,1)
+
+
+def kite_simulator(manager, msg):
+    pdebug('kite_simulator: {}'.format(msg))
+
+    try:
+        data = json.loads(msg)
+    except:
+        perror('kite_simulator: Invalid msg: {}'.format(msg))
+        return
+    
+    toDate = data['toDate']
+    fromDate = data['fromDate']
+    startDate = datetime.strptime(fromDate,'%Y-%m-%d') 
+    exchange = 'NSE'
+    
+    ohlc_data = {}
+    for stock_key in data['stock']: #Initialize
+        # Load data from the Cache
+        #cache.setValue(stock_key, 'hdf_freq', hdf_freq)        
+        trade_init(stock_key, data)
+
+        hdf_freq = cache.getValue(stock_key, 'hdf_freq')
+        df = getData(stock_key, startDate, toDate, exchange, hdf_freq, False, stock_key)
+        ohlc_data[stock_key] = df
+
+    if data['mode'] == 'quick':
+        pinfo('Running Quick Backtest')
+        quick_backtest(data, ohlc_data, cache, exchange)
+    else:
+        pinfo('Running Full Backtest')
+        full_simulation(data, ohlc_data, cache, exchange)
+    
 
 
 
