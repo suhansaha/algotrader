@@ -82,10 +82,10 @@ def render_charts(data, trade, symbol, chart_type='haikin'):
     freq = redis_conn.hget(symbol+cache_type_global, 'freq')
 
     if freq != '1D':
-        pinfo(freq)
+        #pinfo(freq)
         range_break = [{'pattern': 'hour', 'bounds': [16, 9]}, {'bounds': ['sat', 'mon']}]
     else:
-        pinfo(freq)
+        #pinfo(freq)
         range_break = [{'bounds': ['sat', 'mon']}]
 
     fig = make_subplots(rows=3, cols=1, shared_xaxes=True, row_width=[3,1,5], vertical_spacing = 0.01)
