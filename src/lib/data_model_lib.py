@@ -35,7 +35,7 @@ def resample(df, freq = '1T'):
 class cache_state(Redis):
     def __init__(self, postfix='backtest'):
         Redis.__init__(self, host='redis', port=6379, db=0, charset="utf-8", decode_responses=True)
-        pdebug("Cache initialized for: "+postfix)
+        pinfo("Cache Pointing to: "+postfix)
         self.hash_postfix = postfix
         
     def add(self, key, reset=False):

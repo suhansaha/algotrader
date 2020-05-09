@@ -207,7 +207,7 @@ def notification_despatcher(ws, msg, id='*', Tick=True ):
     if Tick == True:
         # Push msg to msgBufferQueue
         #msg_id = cache.xadd('msgBufferQueue'+cache_postfix, msg, id=id)
-        msg_id = cache.xadd('msgBufferQueue'+cache_postfix, {'data':json.dumps(msg)}, id=id)
+        msg_id = cache.xadd('msgBufferQueue'+cache_postfix, {'data':json.dumps(msg)}, id=id, maxlen=300)
     
     # Step 2.2: else
     else:
@@ -249,7 +249,7 @@ def trade_init(stock_key, algo, freq, qty, sl, target, hdf_freq):
     trade_lock_store[stock_key] = Lock()
 
 
-max_simu_msg = 300
+max_simu_msg = 100
 ohlc_handler_sem = Semaphore(max_simu_msg)
 def kite_simulator(manager, msg):
     pdebug('kite_simulator: {}'.format(msg))

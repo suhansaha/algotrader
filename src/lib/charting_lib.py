@@ -5,6 +5,7 @@ import plotly.graph_objects as go
 from lib.logging_lib import pdebug, pdebug1, pdebug5, perror, pinfo, redis_conn
 from lib.algo_lib import *
 from lib.data_model_lib import *
+import sys
 
 scatter = lambda df, key, title, c, fill='none', fillcolor="rgba(0,40,100,0.02)": go.Scatter(x=df.index.astype('str'), y=df[key], name=title, mode='lines', line=dict(color=c),showlegend=False, fill = fill, fillcolor=fillcolor)
 bar =  lambda df, key, title, c: go.Bar(x=df.index.astype('str'), y=df[key], name=title, marker=dict(color=c),showlegend=False)
@@ -82,10 +83,8 @@ def render_charts(data, trade, symbol, chart_type='haikin'):
     freq = redis_conn.hget(symbol+cache_type_global, 'freq')
 
     if freq != '1D':
-        #pinfo(freq)
         range_break = [{'pattern': 'hour', 'bounds': [16, 9]}, {'bounds': ['sat', 'mon']}]
     else:
-        #pinfo(freq)
         range_break = [{'bounds': ['sat', 'mon']}]
 
     fig = make_subplots(rows=3, cols=1, shared_xaxes=True, row_width=[3,1,5], vertical_spacing = 0.01)
@@ -93,7 +92,7 @@ def render_charts(data, trade, symbol, chart_type='haikin'):
                                             {'count': 2, 'label': '2h', 'step': 'hour', 'stepmode': 'backward'},
                                             {'count': 3, 'label': '3h', 'step': 'hour', 'stepmode': 'backward'},
                                             {'count': 7, 'label': '1d', 'step': 'hour', 'stepmode': 'backward'},
-                                           # {'count': 7, 'label': '1w', 'step': 'day', 'stepmode': 'backward'},
+                                            {'count': 7, 'label': '1w', 'step': 'day', 'stepmode': 'backward'},
                                             {'count': 1, 'label': '1m', 'step': 'month', 'stepmode': 'backward'},
                                             {'count': 3, 'label': '3m', 'step': 'month', 'stepmode': 'backward'},
                                            # {'count': 6, 'label': '6m', 'step': 'month', 'stepmode': 'backward'},
@@ -106,9 +105,6 @@ def render_charts(data, trade, symbol, chart_type='haikin'):
                 'yaxis3': {'anchor': 'x3', 'domain': [0.0, 0.19], 'side': 'right', 'range':[0,100], 'tickvals':[0,30,70,100], 'ticks':'inside','gridcolor':'black', 'showgrid':True, 'linecolor':'black'},
                 'height': 750, 'plot_bgcolor': 'rgba(0,0,0,0)','title': {'text': 'Charts for '+symbol}}
 
-
-
-    #fig.update_xaxes(range=[x_min, x_max])
     try:
 
         pha = pd.DataFrame()
@@ -129,13 +125,11 @@ def render_charts(data, trade, symbol, chart_type='haikin'):
         fig = plot_bbb(fig, price.tail(xaxis_len), 1)
         fig = plot_macd(fig, price.tail(xaxis_len), 2)
         fig = plot_rsi(fig, price.tail(xaxis_len), 3)
-
-        #price['buy'] = []
-        #price['sell'] = []
         
         toffset = 1.005
         if freq == "1D":
             toffset = 1.1
+        
         if 'buy' in trade:
             price['buy'] = trade['buy']
         
@@ -144,7 +138,7 @@ def render_charts(data, trade, symbol, chart_type='haikin'):
 
         fig = plot_trade(fig, price.tail(xaxis_len), toffset, 1)
     except:
-        perror("Exception in plotting")
+        print("Exception in plotting {}".format(sys.exc_info()[0]))
         pass
 
     return fig
@@ -161,13 +155,6 @@ def freedom_chart(symbol, cache_type, chart_type='haikin'):
 
     dfohlc = my_cache.getOHLC(symbol)
 
-    #pinfo('OHLC: {}'.format(dfohlc.shape[0]))
-
-    #ohlc_df = pd.read_json(redis_conn.get(symbol), orient='columns')
-
-    #pinfo('ohlc_df: {}'.format(ohlc_df.shape[0]))
-
-    #ohlc_df.index.rename('date', inplace=True)
     trade_df = pd.read_json(redis_conn.get(symbol+cache_type+'Trade'), orient='columns')
 
     trade_df = trade_df.tail(500) # safety for algo on longer durations

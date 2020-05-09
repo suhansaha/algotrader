@@ -39,7 +39,7 @@ def start_backtest(n_clicks, stocks, qty, sl, target, start_date, end_date, algo
 
     pdebug1(stocks)
     # Step 1: Create the msg for initiating backtest
-    pinfo(freq)
+    #pinfo(freq)
     backtest_msg={'stock':stocks,'sl':sl,'target':target,'qty':qty,'algo':algo_name,'fromDate':fromDate,'toDate':toDate,'freq':freq}
 
     try:
