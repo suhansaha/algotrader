@@ -2,7 +2,7 @@ import plotly
 import plotly.graph_objs as go
 from plotly.subplots import make_subplots
 import plotly.graph_objects as go
-from lib.logging_lib import pdebug, pdebug1, pdebug5, perror, pinfo, cache_type, redis_conn
+from lib.logging_lib import pdebug, pdebug1, pdebug5, perror, pinfo, redis_conn
 from lib.algo_lib import *
 from lib.data_model_lib import *
 
@@ -56,8 +56,9 @@ def plot_trade(fig, df, toffset, pos=1):
     return fig
 
 
-
+cache_type_global = ""
 def render_charts(data, trade, symbol, chart_type='haikin'): 
+    global cache_type_global
     price = data
 
     if data.shape[0] == 0:
@@ -120,7 +121,7 @@ def render_charts(data, trade, symbol, chart_type='haikin'):
 
         #price['buy'] = []
         #price['sell'] = []
-        freq = redis_conn.hget(symbol+cache_type, 'freq')
+        freq = redis_conn.hget(symbol+cache_type_global, 'freq')
         toffset = 1.005
         if freq == "1D":
             toffset = 1.1
@@ -138,13 +139,17 @@ def render_charts(data, trade, symbol, chart_type='haikin'):
     return fig
 
 
-def freedom_chart(symbol, chart_type='haikin'):
-    if not redis_conn.exists(symbol):
-        return ""
+def freedom_chart(symbol, cache_type, chart_type='haikin'):
+    global cache_type_global
 
+    cache_type_global = cache_type
+    #if not redis_conn.exists(symbol):
+    #    return "not found"
+    #print(cache_type)
     my_cache = cache_state(cache_type)
 
     dfohlc = my_cache.getOHLC(symbol)
+
     #pinfo('OHLC: {}'.format(dfohlc.shape[0]))
 
     #ohlc_df = pd.read_json(redis_conn.get(symbol), orient='columns')

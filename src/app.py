@@ -81,7 +81,13 @@ def update_intervals(n_intervals, clicks):
     [Input('yaxis-column', 'value')])
 def update_select_chart(values ):
     stock_select_options = pd.DataFrame({'label':values,'value':values}).to_dict(orient='records')
-    return stock_select_options, values[0]
+
+    val = ""
+    #pinfo(values.len)
+    if len(values) != 0:
+        val = values[0]
+
+    return stock_select_options, val
 
 @dash_app.callback(
     [Output('example-graph', 'figure'),
@@ -92,6 +98,8 @@ def update_output(n_intervals, value, chart_type ):
     stock = value
     pdebug1("In update output: {}".format(stock))
     
+    
+
     try:
         fh = open('log/freedom_trade.log','r')
         logMsg = fh.read()
@@ -102,10 +110,14 @@ def update_output(n_intervals, value, chart_type ):
 
     fig = ''
     trade_summary = 'Ongoing ...'
+
+    if stock == '':
+        return fig, 'logMsg', 'No option selected', ''
+
     summary_stat = redis_conn.hget(stock+cache_type, 'last_processed')
 
     if redis_conn.get('done'+cache_type) == "1":
-        fig = freedom_chart(stock, chart_type) ## to reduce load on processor
+        fig = freedom_chart(stock, cache_type, chart_type) ## to reduce load on processor
         trade_df = pd.read_json( redis_conn.get(stock+cache_type+'Trade') )
 
         try:
@@ -209,7 +221,7 @@ def add_row(value, ts, rows, columns):
             live_cache.setValue(row['stock'], 'freq', row['freq'])
             live_cache.setValue(row['stock'], 'mode', row['mode'])
     else:
-        pinfo("Remove all the stock: {}".format(stock))
+        pinfo("Remove all the stock")
         live_cache.remove()
         
     try:
