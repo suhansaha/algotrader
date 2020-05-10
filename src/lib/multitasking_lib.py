@@ -30,7 +30,6 @@ class myThread (threading.Thread):
         self.pubsub = pubsub
         self.manager = manager
         self.msg = msg
-        self.stop = False
         
     def run(self):
         pdebug1("Starting " + self.name)
@@ -58,10 +57,15 @@ class myThread (threading.Thread):
                 #pinfo(self.worker.is_alive())
                 #self.worker.terminate()
                 #break
+            elif msg == 'pause':
+                self.manager.pause = True
+            elif msg == 'resume':
+                self.manager.pause = False
             else:
+                self.manager.abort = False
+                self.manager.pause = False
                 self.workerThread = myThread(self.manager, self.name+'_worker', self.callback, False, msg)
                 self.workerThread.start()
-                self.manager.abort = False
                 #self.worker = multiprocessing.Process(target=self.callback, args=(self.manager, msg,)) 
                 #self.worker.start()
         self.workerThread.join()
@@ -502,14 +506,14 @@ def ohlc_tick_handler(manager, msg):
                     pass
                 
                 # Start job to process Tick
-                if manager.abort == False:
+                if manager.abort == False and manager.pause == False:
                     trade_job_sem.acquire()
                     manager.add(stock_id, trade_job, False, hash_key)
 
             ohlc_handler_sem.release()
 
 def trade_job(manager, hash_key):
-    if manager.abort == True:
+    if manager.abort == True or manager.pause == True:
         return
 
     pdebug1('trade_job: {}'.format(hash_key))
@@ -699,8 +703,33 @@ def placeorder(prefix, df, stock, last_processed):
     cache.pushTrade(stock, tmp_df)
 
 
-def tick_resampler(manager, msg):
-    pdebug('tick_resampler: {}'.format(msg))
+kws = None
+def live_trade_handler(manager, msg):
+    global kws
+    pdebug('live_trade_handler: {}'.format(msg))
+    # 1: Start kite websocket connections
+    # Initialise
+    if msg == 'INIT':
+        try:
+            KiteAPIKey = cache.get('KiteAPIKey')
+            kite = KiteConnect(api_key=KiteAPIKey)
+            kws = KiteTicker(KiteAPIKey, kite.access_token)
+            # Assign the callbacks.
+            kws.on_ticks = on_ticks
+            kws.on_connect = on_connect
+            kws.on_order_update = on_order_update
+        except Exception as e:
+            perror('Could not connect to KITE server: {}'.format(e))
+    elif msg == 'START':
+        kws.connect(threaded=True)
+    elif msg == 'STATUS':
+        pinfo(kws.is_connected())
+    elif msg == 'CLOSE':
+        kws.close()
+    else:
+        #TODO: Implement subscribe, unsubscribe etc
+        pass
+
 
 def order_handler(manager, msg):
     pdebug('order_handler: {}'.format(msg))
@@ -715,23 +744,7 @@ def order_handler(manager, msg):
 
    
 
-# This function implements logic to resume trading post abrupt termination
-def auto_resume_trade(msg):
-    pdebug('resume_trade: {}'.format(msg))
-    
-    # 1: Get list of open orders from Kite
-    
-    # 2: Loop through all the open trades in the system
-    
-    # 3: If an open trade in the system is not present in Kite, reset status to init
-    
-    # 4: For open trades fill OHLC buffer with historical data
-
-backtest_manager = ""
-order_manager = ""
-live_trade_manager = ""
 def freedom_init(manager, msg):
-    global backtest_manager, order_manager, live_trade_manager
     pdebug('freedom_init: {}'.format(msg))
     job_alive = lambda x: pinfo("backtest_manager: {}".format(x.job.is_alive()))
     # 0: Initialize settings
@@ -739,16 +752,6 @@ def freedom_init(manager, msg):
     cache.set('done'+cache_type,1)
     backtest_manager = threadManager(cache_type, ["kite_simulator","ohlc_tick_handler"], [kite_simulator, ohlc_tick_handler])
 
-    #live_manager = threadManager(cache_id, ["ohlc_tick_handler","tick_resampler","order_handler"], [ohlc_tick_handler, tick_resampler, order_handler])
-
-    # 2: Start kite websocket connections
-    # Initialise
-    #kws = KiteTicker(KiteAPIKey, kite.access_token)
-
-    # Assign the callbacks.
-    #kws.on_ticks = on_ticks
-    #kws.on_connect = on_connect
-    #kws.on_order_update = on_order_update
+    live_manager = threadManager(cache_id, ["ohlc_tick_handler","live_trade_handler","order_handler"], [ohlc_tick_handler, live_trade_handler, order_handler])
     
 #TODO: Watchdog implementation to resume processes
-#TODO: Implementation of user initiated aborts and restart

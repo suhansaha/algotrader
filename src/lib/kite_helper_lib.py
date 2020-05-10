@@ -1,108 +1,103 @@
-from lib.logging_lib import pdebug, pdebug1, pdebug5, perror, pinfo
+from lib.logging_lib import pdebug, pdebug1, pdebug5, perror, pinfo, cache_id
+from lib.data_model_lib import *
 import pandas as pd
 import datetime as dt
 from threading import Lock
 
-
+#TODO: Replace with redis cache
 def getInstruments(exchange='NSE'):
-    instruments_df = pd.DataFrame(data=kite.instruments(exchange))
-    instruments_df = instruments_df.set_index('tradingsymbol')
-    return instruments_df
+  instruments_df = pd.DataFrame(data=kite.instruments(exchange))
+  instruments_df = instruments_df.set_index('tradingsymbol')
+  return instruments_df
 
 def downloadData(symbol="HDFC", fromDate= dt.datetime.now() - dt.timedelta(days = 1), toDate=dt.datetime.now(), freq="minute"):
-    symbolToken = instruments_df.loc[symbol,'instrument_token']
-    
-    if type(symbolToken).__name__ == 'Series':
-        symbolToken = symbolToken[symbol].values[0]
-    
-    pdebug5(freq)
-    raw_data = pd.DataFrame(data=kite.historical_data(symbolToken, fromDate, toDate, freq, continuous=False))
-    raw_data = raw_data.set_index('date').tz_localize(None)
-    return raw_data
-
-def resample2(data,freq):
-    data = data.resample(freq).agg({'open':'first','high':'max','low':'min','close':'last','volume':'sum'})
-    #data.columns = data.columns.droplevel()
-    return data
+  symbolToken = instruments_df.loc[symbol,'instrument_token']
+  
+  if type(symbolToken).__name__ == 'Series':
+    symbolToken = symbolToken[symbol].values[0]
+  
+  pdebug5(freq)
+  raw_data = pd.DataFrame(data=kite.historical_data(symbolToken, fromDate, toDate, freq, continuous=False))
+  raw_data = raw_data.set_index('date').tz_localize(None)
+  return raw_data
 
 kite_cache_path = 'data/kite_cache_day.h5'
 kite_cache_path = 'data/kite_cache.h5'
-cache_lock = Lock()
+hdf_cache_lock = Lock()
 
 def getData(symbol, fromDate, toDate, exchange="NSE", freq="minute", force=False, symbolToken=''):
-    #symbol = "SBIN"
-    key = freq+"/"+exchange+"/"+symbol
-    
-    try:
-        if symbolToken == '':
-            symbolToken = instruments_df.loc[symbol,'instrument_token']
-    except:
-        pwarning(symbol+":stock not in the list")
-        return pd.DataFrame()
+  key = freq+"/"+exchange+"/"+symbol
+  
+  try:
+    if symbolToken == '':
+        symbolToken = instruments_df.loc[symbol,'instrument_token']
+  except:
+    pwarning(symbol+":stock not in the list")
+    return pd.DataFrame()
 
-    #fromDate = dt.datetime(2019,4,8)
-    #toDate = dt.datetime(2019,4,10)
+  #fromDate = dt.datetime(2019,4,8)
+  #toDate = dt.datetime(2019,4,10)
+  
+  if force:
+    temp_data = downloadData(symbol, fromDate, toDate, freq)
+    return temp_data
+  
+  try:
+    hdf_cache_lock.acquire()
+    temp_file = pd.HDFStore(kite_cache_path, mode="r")
+    rDate = temp_file.get(key).tail(1).index
+    lDate = temp_file.get(key).head(1).index
     
-    if force:
-        temp_data = downloadData(symbol, fromDate, toDate, freq)
-        return temp_data
+    #temp_file.close()
     
-    try:
-        cache_lock.acquire()
-        temp_file = pd.HDFStore(kite_cache_path, mode="r")
-        rDate = temp_file.get(key).tail(1).index
-        lDate = temp_file.get(key).head(1).index
-        
-        #temp_file.close()
-        
-        #print(fromDate,toDate, lDate, rDate)
-        raw_data = pd.read_hdf(temp_file, key=key)
+    #print(fromDate,toDate, lDate, rDate)
+    raw_data = pd.read_hdf(temp_file, key=key)
 
-        if   (fromDate < lDate ) and (toDate <= rDate):
-            pdebug5("Downloading data from fromDate to lDate")
-            temp_data = downloadData(symbol,  fromDate, lDate, freq)
-            temp_data = temp_data.append(raw_data.tail(-1))
-#            temp_data.to_hdf("kite_data/kite_cache.h5", key=key, mode="a", format="table")
-        elif (fromDate >=lDate ) and (toDate <= rDate):
-            pdebug5("Using cache: Not downloading data")
-            temp_data = raw_data
-        elif (fromDate >= lDate ) and (toDate > rDate):
-            pdebug5("Downloading data from rDate to toDate")
-            temp_data = downloadData(symbol,  rDate, toDate, freq)
-            temp_data = raw_data.append(temp_data.tail(-1))
-#            temp_data.to_hdf("kite_data/kite_cache.h5", key=key, mode="a", format="table")
-        elif (fromDate < lDate ) and (toDate > rDate):
-            pdebug5("Downloading data from fromDate to lDate")
-            temp_data = downloadData(symbol,  fromDate, lDate, freq)
-            temp_data = temp_data.append(raw_data.tail(-1))
-            pdebug5("Downloading data from rDate to toDate")
-            temp_data2 = downloadData(symbol,  rDate, toDate, freq)
-            temp_data = temp_data.append(temp_data2.tail(-1))
-#            temp_data.to_hdf("kite_data/kite_cache.h5", key=key, mode="a", format="table")
+    if   (fromDate < lDate ) and (toDate <= rDate):
+      pdebug5("Downloading data from fromDate to lDate")
+      temp_data = downloadData(symbol,  fromDate, lDate, freq)
+      temp_data = temp_data.append(raw_data.tail(-1))
+  #            temp_data.to_hdf("kite_data/kite_cache.h5", key=key, mode="a", format="table")
+    elif (fromDate >=lDate ) and (toDate <= rDate):
+      pdebug5("Using cache: Not downloading data")
+      temp_data = raw_data
+    elif (fromDate >= lDate ) and (toDate > rDate):
+      pdebug5("Downloading data from rDate to toDate")
+      temp_data = downloadData(symbol,  rDate, toDate, freq)
+      temp_data = raw_data.append(temp_data.tail(-1))
+  #            temp_data.to_hdf("kite_data/kite_cache.h5", key=key, mode="a", format="table")
+    elif (fromDate < lDate ) and (toDate > rDate):
+      pdebug5("Downloading data from fromDate to lDate")
+      temp_data = downloadData(symbol,  fromDate, lDate, freq)
+      temp_data = temp_data.append(raw_data.tail(-1))
+      pdebug5("Downloading data from rDate to toDate")
+      temp_data2 = downloadData(symbol,  rDate, toDate, freq)
+      temp_data = temp_data.append(temp_data2.tail(-1))
+  #            temp_data.to_hdf("kite_data/kite_cache.h5", key=key, mode="a", format="table")
 
-    except Exception as e:
-        perror(e)
-        temp_data = downloadData(symbol, fromDate, toDate, freq)
-    finally:
-        #temp_data.to_hdf(temp_file, key=key, mode="a")
-        temp_file.close()
-        
-        cache_lock.release()
-        return temp_data[(temp_data.index >= fromDate) & (temp_data.index <= toDate)]
+  except Exception as e:
+    perror(e)
+    temp_data = downloadData(symbol, fromDate, toDate, freq)
+  finally:
+    #temp_data.to_hdf(temp_file, key=key, mode="a")
+    temp_file.close()
+    
+    hdf_cache_lock.release()
+    return temp_data[(temp_data.index >= fromDate) & (temp_data.index <= toDate)]
     
 def portfolioDownload(stocklist, toDate):
-    stocklist_df = pd.DataFrame()
-    for index, row in stocklist.iterrows():
-        symbol = row[0]
-        pdebug5("Downloading data for: "+symbol)
-        temp_data = getData(symbol,  toDate - dt.timedelta(days = 5), toDate)
-        temp_data['symbol'] = symbol
-        temp_data.set_index(['symbol',temp_data.index], inplace=True)
-        #print(temp_data)
-        stocklist_df = stocklist_df.append(temp_data)
-    
-    #print(stocklist_df)
-    return stocklist_df
+  stocklist_df = pd.DataFrame()
+  for index, row in stocklist.iterrows():
+    symbol = row[0]
+    pdebug5("Downloading data for: "+symbol)
+    temp_data = getData(symbol,  toDate - dt.timedelta(days = 5), toDate)
+    temp_data['symbol'] = symbol
+    temp_data.set_index(['symbol',temp_data.index], inplace=True)
+    #print(temp_data)
+    stocklist_df = stocklist_df.append(temp_data)
+  
+  #print(stocklist_df)
+  return stocklist_df
 
 
 
@@ -655,141 +650,77 @@ historical_candles_msg = json.loads('''{
 ###############################################
 ######### Kite Connect Wrappers ###############
 ##############################################
-
-from talib import MACD, MACDEXT, RSI, BBANDS, MACD, AROON, STOCHF, ATR, OBV, ADOSC, MINUS_DI, PLUS_DI, ADX, EMA, SMA
-from talib import LINEARREG, BETA, LINEARREG_INTERCEPT, LINEARREG_SLOPE, STDDEV, TSF, ADOSC, VAR, ROC
-from talib import CDLABANDONEDBABY, CDL3BLACKCROWS,CDLDOJI, CDLDOJISTAR, CDLDRAGONFLYDOJI,CDLENGULFING,CDLEVENINGDOJISTAR,CDLEVENINGSTAR, CDLGRAVESTONEDOJI, CDLHAMMER, CDLHANGINGMAN,CDLHARAMI,CDLHARAMICROSS,CDLINVERTEDHAMMER,CDLMARUBOZU,CDLMORNINGDOJISTAR,CDLMORNINGSTAR,CDLSHOOTINGSTAR,CDLSPINNINGTOP,CDL3BLACKCROWS, CDL3LINESTRIKE, CDLKICKING
-
-import pandas as pd
-#import numpy as np
-#import tables
-import datetime as dt
-#import logging
-
-#import matplotlib.pyplot as plt
-#import seaborn as sns
-#import plotly.graph_objs as go
-#from plotly import tools
-#from plotly.offline import download_plotlyjs, init_notebook_mode, plot, iplot
-
-#from kiteconnect import KiteConnect
-#from kiteconnect import KiteTicker
+from kiteconnect import KiteConnect
+from kiteconnect import KiteTicker
 #import platform
-#from selenium import webdriver
 #import re
-#import os
-#from multiprocessing import Process
-#import gc
-#import warnings
-#import os
-#from multiprocessing import Process
-#import warnings
-#warnings.filterwarnings('ignore')
+#nifty50 = pd.read_csv("data/ind_nifty50list.csv")
+#niftynext50 = pd.read_csv("data/ind_niftynext50list.csv")
+#midcap50 = pd.read_csv("data/ind_niftymidcap50list.csv")
 
-nifty50 = pd.read_csv("data/ind_nifty50list.csv")
-niftynext50 = pd.read_csv("data/ind_niftynext50list.csv")
-midcap50 = pd.read_csv("data/ind_niftymidcap50list.csv")
+#downloadlist = nifty50['Symbol']
+#industry = niftynext50['Industry'].unique()
 
-downloadlist = nifty50['Symbol']
-industry = niftynext50['Industry'].unique()
+#KiteAPIKey = "b2w0sfnr1zr92nxm"
+#KiteAPISecret = "jtga2mp2e5fn29h8w0pe2kb722g3dh1q"
 
-toTick = lambda x,n=5: np.round((np.floor(x *100)+n-1)/n)*n/100
+###################################################
+### Kite Order functions                        ###
+###################################################
 
-KiteAPIKey = "b2w0sfnr1zr92nxm"
-KiteAPISecret = "jtga2mp2e5fn29h8w0pe2kb722g3dh1q"
-
-holiday = pd.DataFrame([dt.datetime(2019,3,4),
-dt.datetime(2019,3,21),
-dt.datetime(2019,4,17),
-dt.datetime(2019,4,19),
-dt.datetime(2019,4,29),
-dt.datetime(2019,5,1),
-dt.datetime(2019,6,5),
-dt.datetime(2019,8,12),
-dt.datetime(2019,8,15),
-dt.datetime(2019,9,10)])
-
-
-isholiday = lambda mydt: ((holiday == mydt).any() == True)[0] or mydt.weekday() == 5 or mydt.weekday() == 6
-
-def getFromDate(todate,  days = 1):
-    tmp = todate.weekday()
-    if tmp == 0:
-        days = days + 2
-    elif tmp >4:
-        days = days + tmp - 5
-    
-    days = days + 1
-    
-    
-    fromdate = todate - dt.timedelta(days=days)
-    
-    adj = holiday[(holiday > fromdate)&(holiday<todate)].dropna().shape[0]
-    fromdate = fromdate - dt.timedelta(days=adj)
-    return fromdate
-
-
-#logging.critical("BUY"+symbol)
 def buy_slm(symbol, price, trigger,quantity=1): 
-    logger.info('%12s'%"BUY SLM: "+symbol+", price: "+str('%0.2f'%price)+", stoploss: "+str('%0.2f'%stoploss)+", quantity: "+str(quantity))
-    
-    if papertrade:
-        return
-    
-    try:
-        order_id = kite.place_order(tradingsymbol=symbol,
-                                exchange=kite.EXCHANGE_NSE,
-                                transaction_type=kite.TRANSACTION_TYPE_BUY,
-                                quantity=quantity,
-                                order_type=kite.ORDER_TYPE_SLM,
-                                product=kite.PRODUCT_MIS,
-                                trigger_price=round(trigger,1),
-                                #stoploss=round(stoploss,1),
-                                #price=price,
-                                variety=kite.VARIETY_REGULAR
-                                )
-        logger.info("Order placed. ID is: {}".format(order_id))
-    except Exception as e:
-        logger.info("Order placement failed: {}".format(e.message))
-        
-def sell_slm(symbol, price, trigger, quantity=1):
-    
-    logger.info('%12s'%"SELL SLM: "+symbol+", price: "+str('%0.2f'%price)+", stoploss: "+str('%0.2f'%stoploss)+", quantity: "+str(quantity))
-       
-    if papertrade:
-         return
-    try:
-        order_id = kite.place_order(tradingsymbol=symbol,
+  logger.info('%12s'%"BUY SLM: "+symbol+", price: "+str('%0.2f'%price)+", stoploss: "+str('%0.2f'%stoploss)+", quantity: "+str(quantity))
+  
+  try:
+    order_id = kite.place_order(tradingsymbol=symbol,
                             exchange=kite.EXCHANGE_NSE,
-                            transaction_type=kite.TRANSACTION_TYPE_SELL,
+                            transaction_type=kite.TRANSACTION_TYPE_BUY,
                             quantity=quantity,
                             order_type=kite.ORDER_TYPE_SLM,
                             product=kite.PRODUCT_MIS,
                             trigger_price=round(trigger,1),
+                            #stoploss=round(stoploss,1),
                             #price=price,
-                            variety=kite.VARIETY_REGULAR)
-        logger.info("Order placed. ID is: {}".format(order_id))
-    except Exception as e:
-        logger.info("Order placement failed: {}".format(e.message))
+                            variety=kite.VARIETY_REGULAR
+                            )
+    logger.info("Order placed. ID is: {}".format(order_id))
+  except Exception as e:
+    logger.info("Order placement failed: {}".format(e.message))
+        
+def sell_slm(symbol, price, trigger, quantity=1):
+    
+  logger.info('%12s'%"SELL SLM: "+symbol+", price: "+str('%0.2f'%price)+", stoploss: "+str('%0.2f'%stoploss)+", quantity: "+str(quantity))
+
+  try:
+    order_id = kite.place_order(tradingsymbol=symbol,
+                        exchange=kite.EXCHANGE_NSE,
+                        transaction_type=kite.TRANSACTION_TYPE_SELL,
+                        quantity=quantity,
+                        order_type=kite.ORDER_TYPE_SLM,
+                        product=kite.PRODUCT_MIS,
+                        trigger_price=round(trigger,1),
+                        #price=price,
+                        variety=kite.VARIETY_REGULAR)
+    logger.info("Order placed. ID is: {}".format(order_id))
+  except Exception as e:
+    logger.info("Order placement failed: {}".format(e.message))
 
 def buy_bo(symbol, price, trigger, stoploss, squareoff, quantity=1, tag="bot"): 
-    logger.info('%12s'%"BUY BO: "+symbol+", price: "+str('%0.2f'%price)+", squareoff: "+str('%0.2f'%squareoff)+", stoploss: "+str('%0.2f'%stoploss)+", quantity: "+str(quantity))
-    if papertrade:
-        return
-    
-    try:
-        order_id = kite.place_order(tradingsymbol=symbol, exchange=kite.EXCHANGE_NSE, transaction_type=kite.TRANSACTION_TYPE_BUY,
-                        order_type=kite.ORDER_TYPE_LIMIT, product=kite.PRODUCT_MIS, variety=kite.VARIETY_BO, 
-                                quantity=quantity, trigger_price=trigger, price=price,
-                                squareoff=squareoff,  stoploss=stoploss, tag=tag )
-        logger.info("Order placed. ID is: {}".format(order_id))
-    except Exception as e:
-        logger.info("Order placement failed: {}".format(e.message))
+  pinfo('%12s'%"BUY BO: "+symbol+", price: "+str('%0.2f'%price)+", squareoff: "+str('%0.2f'%squareoff)+", stoploss: "+str('%0.2f'%stoploss)+", quantity: "+str(quantity))
+  
+  try:
+    order_id = kite.place_order(tradingsymbol=symbol, exchange=kite.EXCHANGE_NSE, transaction_type=kite.TRANSACTION_TYPE_BUY,
+                    order_type=kite.ORDER_TYPE_LIMIT, product=kite.PRODUCT_MIS, variety=kite.VARIETY_BO, 
+                            quantity=quantity, trigger_price=trigger, price=price,
+                            squareoff=squareoff,  stoploss=stoploss, tag=tag )
+    logger.info("Order placed. ID is: {}".format(order_id))
+  except Exception as e:
+    logger.info("Order placement failed: {}".format(e.message))
 
 
 
 def sell_bo(symbol, price, trigger, stoploss, squareoff, quantity=1, tag="bot"): 
-    logger.info('%12s'%"SELL BO: "+symbol+", price: "+str('%0.2f'%price)+", squareoff: "+str('%0.2f'%squareoff)+", stoploss: "+str('%0.2f'%stoploss)+", quantity: "+str(quantity))
+    pinfo('%12s'%"SELL BO: "+symbol+", price: "+str('%0.2f'%price)+", squareoff: "+str('%0.2f'%squareoff)+", stoploss: "+str('%0.2f'%stoploss)+", quantity: "+str(quantity))
     if papertrade:
         return
     
@@ -803,116 +734,71 @@ def sell_bo(symbol, price, trigger, stoploss, squareoff, quantity=1, tag="bot"):
         logger.info("Order placement failed: {}".format(e.message))
         
 def getOrders():    
-    # Fetch all orders
-    return pd.DataFrame(kite.orders())
+  # Fetch all orders
+  return pd.DataFrame(kite.orders())
 
 def cancelOrder(orderId):
-    if papertrade:
-        logging.critical("In Paper Trade Mode: Order cancellation not possible")
-        return
-    
-    try:
-        kite.cancel_order(variety=kite.VARIETY_REGULAR, order_id=orderId, parent_order_id=None)    
-    except Exception as e:
-        logger.info("Order Cancellation failed: {}".format(e.message))
-        
+  try:
+    kite.cancel_order(variety=kite.VARIETY_REGULAR, order_id=orderId, parent_order_id=None)    
+  except Exception as e:
+    logger.info("Order Cancellation failed: {}".format(e.message))
+
+#TODO: Modify this function for SLM     
 def squareoff(symbol=None, tag="bot"):
-    logger.info('%12s'%"Squareoff: "+symbol)
-    if papertrade:
-        return
-    
-    orders_df = pd.DataFrame(kite.orders())
-    if symbol != None:
-        open_orders = orders_df[(orders_df['tradingsymbol']==symbol) & (orders_df['status'] == 'TRIGGER PENDING')  & (orders_df['tag'] == tag)]
-    else:
-        open_orders = orders_df[(orders_df['status'] == 'TRIGGER PENDING')  & (orders_df['tag'] == tag)]
-        
-    for index, row in open_orders.iterrows():
-        print(row.order_id, row.parent_order_id)
-        #kite.exit_order(variety=kite.VARIETY_AMO, order_id=row.order_id, parent_order_id=row.parent_order_id)
-        kite.exit_order(variety=kite.VARIETY_BO, order_id=order_id, parent_order_id=parent_order_id)
+  pinfo('%12s'%"Squareoff: "+symbol)
 
-        
+  orders_df = pd.DataFrame(kite.orders())
+  if symbol != None:
+    open_orders = orders_df[(orders_df['tradingsymbol']==symbol) & (orders_df['status'] == 'TRIGGER PENDING')  & (orders_df['tag'] == tag)]
+  else:
+    open_orders = orders_df[(orders_df['status'] == 'TRIGGER PENDING')  & (orders_df['tag'] == tag)]
+      
+  for index, row in open_orders.iterrows():
+    pinfo(row.order_id, row.parent_order_id)
+    kite.exit_order(variety=kite.VARIETY_BO, order_id=order_id, parent_order_id=parent_order_id)
+
+ 
+###################################################
+### Kite CallBack functions                     ###
+###################################################
 def initTrade(ws):
-    ws.prevtimeStamp = dt.datetime.now() - dt.timedelta(minutes=10)
-    toDate = dt.datetime.now()
-    
-    ws.tradebook_df = pd.DataFrame()
-    
-    for symbol in portfolio[0]:
-        temp_df = pd.DataFrame(data=[algoTrade(symbol)], index=[symbol], columns=['symbol'])
-        ws.tradebook_df = ws.tradebook_df.append(temp_df)
-        
-    #TODO: Convert to multistock handling
-    #symbol = portfolio[0].iloc[-1]
-    #ws.a = algoTrade(symbol)
-    
-    ws.LiveStream = pd.DataFrame()
-    ws.LiveStreamOHLC = pd.DataFrame()
-    ws.LiveStreamOHLC = portfolioDownload(portfolio, toDate) 
-    
-def ticksHandler(ws, ticks):
-    #timeStamp = dt.datetime.now().replace(second=0, microsecond=0)
-    tick_df = pd.DataFrame(ticks)
-    
-    try:
-        #tick_df.loc[tick_df['timestamp'].isna(), 'timestamp'] = timeStamp
-        tick_df = tick_df[['timestamp','instrument_token','last_price','volume']]
-        tick_df.instrument_token = tick_df.instrument_token.apply(EQSYMBOL)
-        tick_df.columns = ['date','symbol','price','volume']
-        tick_df.set_index(['symbol','date'], inplace=True)
-        
-        timeStamp = tick_df.index[0][-1].to_pydatetime()
-        
-    except  Exception as e:
-        logging.debug("Exception: ticksHandler: "+str(e)+str(tick_df))
-        
-    if( (timeStamp - ws.prevtimeStamp) >= dt.timedelta(minutes=1)):
-        ws.prevtimeStamp = timeStamp
-        resample(ws)
-    
-    ws.LiveStream = ws.LiveStream.append(tick_df)
-    
-def orderNotification(ws,data):
-    #logger.debug(data)
-    order_df = pd.DataFrame.from_dict(data, orient='index')
+  ws.cache = cache_state(cache_id)
 
-    symbol = order_df.loc['tradingsymbol'][0]
-    
-    ws.tradebook_df.loc[symbol,'symbol'].update_order(order_df)
-    #logger.debug(order_df)
 
 
 def on_ticks(ws, ticks):
-    # Callback to receive ticks.
-    #logging.debug("Ticks: {}".format(ticks))
-    #ticksHandler(ws, ticks)
-    notification_despatcher(ws, ticks)
+  # Callback to receive ticks.
+  #logging.debug("Ticks: {}".format(ticks))
+  notification_despatcher(ws, ticks)
 
 
 def on_connect(ws, response):
-    initTrade(ws)
-    pdebug(portfolioToken)
-    # Callback on successful connect.
-    # Subscribe to a list of instrument_tokens (RELIANCE and ACC here).
-    #ws.subscribe(portfolioToken)
+  initTrade(ws)
+  # Callback on successful connect.
+  # Subscribe to a list of instrument_tokens (RELIANCE and ACC here).
+  ws.subscribe(portfolioToken)
 
-    ws.subscribe(portfolioToken)
-    
-    # Set RELIANCE to tick in `full` mode.
-    # MODE_LTP, MODE_QUOTE, or MODE_FULL
+  # Set RELIANCE to tick in `full` mode.
+  # MODE_LTP, MODE_QUOTE, or MODE_FULL
 
-    ws.set_mode(ws.MODE_FULL, portfolioToken)
-    #ws.set_mode(ws.MODE_FULL, [225537]) 
-    #ws.set_mode(ws.MODE_LTP, [225537, 3861249]) 
-    #ws.set_mode(ws.MODE_MODE_QUOTE, [2714625,779521]) 
+  ws.set_mode(ws.MODE_FULL, portfolioToken)
+  #ws.set_mode(ws.MODE_FULL, [225537]) 
+  #ws.set_mode(ws.MODE_LTP, [225537, 3861249]) 
+  #ws.set_mode(ws.MODE_MODE_QUOTE, [2714625,779521]) 
 
 def on_close(ws, code, reason):
-    # On connection close stop the main loop
-    # Reconnection will not happen after executing `ws.stop()`
-    ws.stop()
+  # On connection close stop the main loop
+  # Reconnection will not happen after executing `ws.stop()`
+  ws.stop()
 
 def on_order_update(ws, data):
-    #logger.info("New Order Update")
-    #orderNotification(ws,data)
-    notification_despatcher(ws,data)
+  #logger.info("New Order Update")
+  notification_despatcher(ws,data, Tick=False)
+
+#TODO: Note required: Delete
+def orderNotification(ws,data):
+  #logger.debug(data)
+  order_df = pd.DataFrame.from_dict(data, orient='index')
+  symbol = order_df.loc['tradingsymbol'][0]
+  ws.tradebook_df.loc[symbol,'symbol'].update_order(order_df)
+  #logger.debug(order_df)
