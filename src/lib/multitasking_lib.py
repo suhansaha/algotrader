@@ -30,6 +30,7 @@ class myThread (threading.Thread):
         self.pubsub = pubsub
         self.manager = manager
         self.msg = msg
+        self.stop = False
         
     def run(self):
         pdebug1("Starting " + self.name)
@@ -49,13 +50,20 @@ class myThread (threading.Thread):
 
         for item in pubsub.listen():
             msg = item['data']
+            #pinfo(msg)
             if msg == 'stop':
-                pubsub.unsubscribe()
-                break
+                pinfo('Stopping : {}'.format(self.name))
+                self.manager.abort = True
+                #pubsub.unsubscribe()
+                #pinfo(self.worker.is_alive())
+                #self.worker.terminate()
+                #break
             else:
                 self.workerThread = myThread(self.manager, self.name+'_worker', self.callback, False, msg)
-                self.workerThread.run()
-
+                self.workerThread.start()
+                self.manager.abort = False
+                #self.worker = multiprocessing.Process(target=self.callback, args=(self.manager, msg,)) 
+                #self.worker.start()
         self.workerThread.join()
     
     #The thread function for one of tasks
@@ -220,7 +228,7 @@ def notification_despatcher(ws, msg, id='*', Tick=True ):
     if Tick == True:
         # Push msg to msgBufferQueue
         #msg_id = cache.xadd('msgBufferQueue'+cache_postfix, msg, id=id)
-        msg_id = cache.xadd('msgBufferQueue'+cache_postfix, {'data':json.dumps(msg)}, id=id, maxlen=300)
+        msg_id = cache.xadd('msgBufferQueue'+cache_postfix, {'data':json.dumps(msg)}, id=id)
     
     # Step 2.2: else
     else:
@@ -228,17 +236,6 @@ def notification_despatcher(ws, msg, id='*', Tick=True ):
         cache.xadd('notificationQueue'+cache_postfix, msg, id = id)
 
 ###################### BackTest ######################
-'''
-# backtest/data
-{
-'stock':'NIFTY',
-'ohlc':[],
-'algo':'BO'
-}
-
-
-'''
-
 trade_lock_store = {} 
 simulator_lock = Lock()
 def trade_init(stock_key, data):        
@@ -271,12 +268,12 @@ def trade_init(stock_key, data):
 
     #cache.set(stock_key, pd.DataFrame().to_json(orient='columns')) #Used for plotting
     
-    trade_lock_store[stock_key] = Lock()
+    #trade_lock_store[stock_key] = Lock()
 
 
 max_simu_msg = 100
 ohlc_handler_sem = Semaphore(max_simu_msg)
-def full_simulation(data, ohlc_data, cache, exchange):
+def full_simulation(data, ohlc_data, cache, exchange, manager):
     cache.publish('ohlc_tick_handler'+cache_postfix,'start')
 
     stock = data['stock'][-1]
@@ -286,6 +283,10 @@ def full_simulation(data, ohlc_data, cache, exchange):
     cache.delete('msgBufferQueue'+cache_postfix)
     cache.delete('notificationQueue'+cache_postfix)
     for i in np.linspace(0,no-1,no): # Push data
+        if manager.abort == True:
+            pinfo('Abort Request: Full Simulation')
+            return
+
         i = int(i)
         msg_dict_open = {}
         msg_dict_high = {}
@@ -402,7 +403,7 @@ def kite_simulator(manager, msg):
         quick_backtest(data, ohlc_data, cache, exchange)
     else:
         pinfo('Running Full Backtest')
-        full_simulation(data, ohlc_data, cache, exchange)
+        full_simulation(data, ohlc_data, cache, exchange, manager)
     
 
 
@@ -411,6 +412,9 @@ trade_job_sem = Semaphore(10)
 def ohlc_tick_handler(manager, msg):
     pdebug('ohlc_tick_handler: {}'.format(msg))
 
+    if msg != 'start':
+        return
+
     # Step 0: Clean queue
     cache.delete('msgBufferQueue'+cache_postfix)
     cache.delete('notificationQueue'+cache_postfix)
@@ -418,6 +422,15 @@ def ohlc_tick_handler(manager, msg):
      
     counter = 0
     while(True):
+        if manager.abort == True:
+            pinfo("Abort Request: ohlc_tick_handler")
+            #cache.xtrim('msgBufferQueue'+cache_postfix,maxlen=0, approximate=False)
+            cache.set('done'+cache_postfix,1)
+            counter = 0
+            ohlc_handler_sem.release()
+            break
+            #cache.xtrim('notificationQueue'+cache_postfix,maxlen=0, approximate=False)
+
         # Step 1: Blocking call to msgBufferQueue and notificationQueue
         if cache.xlen('msgBufferQueue'+cache_postfix) == 0:
             cache.xread({'msgBufferQueue'+cache_postfix:'$','notificationQueue'+cache_postfix:'$'}, block=0, count=5000)
@@ -438,10 +451,9 @@ def ohlc_tick_handler(manager, msg):
         for msg in msgs_q[0][1]:
             #pdebug('ohlc_tick_handler: {}'.format(msg[1]))
             counter = counter + 1
-
             val = json.loads(msg[1]['data'])
             if val == 'done':
-                perror("Un-supported message: {}: {}".format(counter, msg))
+                perror("Processing done: {}: {}".format(counter, msg))
                 cache.set('done'+cache_postfix,1)
                 counter = 0
                 ohlc_handler_sem.release()
@@ -481,19 +493,25 @@ def ohlc_tick_handler(manager, msg):
 
                     cache.setValue(hash_key,'state','SCANNING')
 
+                if not stock_id in trade_lock_store:
+                    trade_lock_store[stock_id] = Lock()
 
-                cache.pushTICK(stock_id, temp_df)
+                try:
+                    cache.pushTICK(stock_id, temp_df)
+                except:
+                    pass
                 
-                # Add to OHLCBuffer in hash
-                #cache.pushOHLC(hash_key,temp_df)
-
                 # Start job to process Tick
-                trade_job_sem.acquire()
-                manager.add(stock_id, trade_job, False, hash_key)
+                if manager.abort == False:
+                    trade_job_sem.acquire()
+                    manager.add(stock_id, trade_job, False, hash_key)
 
             ohlc_handler_sem.release()
 
 def trade_job(manager, hash_key):
+    if manager.abort == True:
+        return
+
     pdebug1('trade_job: {}'.format(hash_key))
     
     stock = cache.getValue(hash_key,'stock')
