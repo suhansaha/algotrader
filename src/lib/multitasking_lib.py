@@ -225,7 +225,7 @@ def msg_to_ohlc(data):
 
 # This function is called by Kite or Kite_Simulation
 def notification_despatcher(ws, msg, id='*', Tick=True ):
-    pdebug1('notification_despatcher:{}=>{}'.format(id,msg))
+    pdebug('notification_despatcher:{}=>{}'.format(id,msg))
     # Step 1: Extract msg type: Tick/Callbacks
     
     # Step 2.1: If Tick
@@ -453,7 +453,7 @@ def ohlc_tick_handler(manager, msg):
         
         # Step 3: Process tick: Start a worker thread for each msg       
         for msg in msgs_q[0][1]:
-            #pdebug('ohlc_tick_handler: {}'.format(msg[1]))
+            pdebug('ohlc_tick_handler: {}'.format(msg[1]))
             counter = counter + 1
             val = json.loads(msg[1]['data'])
             if val == 'done':
@@ -704,20 +704,27 @@ def placeorder(prefix, df, stock, last_processed):
 
 
 kws = None
+kite = None
+kite_api_key = 'b2w0sfnr1zr92nxm'
 def live_trade_handler(manager, msg):
-    global kws
+    global kws, kite, kite_api_key
     pdebug('live_trade_handler: {}'.format(msg))
     # 1: Start kite websocket connections
     # Initialise
     if msg == 'INIT':
         try:
+            cache.set('KiteAPIKey',kite_api_key)
             KiteAPIKey = cache.get('KiteAPIKey')
             kite = KiteConnect(api_key=KiteAPIKey)
+            access_token = cache.get('access_token')
+            kite.set_access_token(access_token)
+            pinfo(kite.access_token)
             kws = KiteTicker(KiteAPIKey, kite.access_token)
             # Assign the callbacks.
             kws.on_ticks = on_ticks
             kws.on_connect = on_connect
             kws.on_order_update = on_order_update
+            cache.publish('ohlc_tick_handler'+cache_id,'start')
         except Exception as e:
             perror('Could not connect to KITE server: {}'.format(e))
     elif msg == 'START':
@@ -726,6 +733,14 @@ def live_trade_handler(manager, msg):
         pinfo(kws.is_connected())
     elif msg == 'CLOSE':
         kws.close()
+    elif msg == 'profile':
+        pinfo(kite.profile())
+    elif msg == 'add':
+        kws.subscribe([225537, 3861249])
+        kws.set_mode(kws.MODE_QUOTE, [225537,3861249])
+    elif msg == 'remove':
+        kws.unsubscribe([3861249])
+        #kws.set_mode(kws.MODE_LTP, [225537,3861249])
     else:
         #TODO: Implement subscribe, unsubscribe etc
         pass
@@ -755,3 +770,135 @@ def freedom_init(manager, msg):
     live_manager = threadManager(cache_id, ["ohlc_tick_handler","live_trade_handler","order_handler"], [ohlc_tick_handler, live_trade_handler, order_handler])
     
 #TODO: Watchdog implementation to resume processes
+
+
+
+###################################################
+### Kite Order functions                        ###
+###################################################
+
+def buy_slm(symbol, price, trigger,quantity=1): 
+  logger.info('%12s'%"BUY SLM: "+symbol+", price: "+str('%0.2f'%price)+", stoploss: "+str('%0.2f'%stoploss)+", quantity: "+str(quantity))
+  
+  try:
+    order_id = kite.place_order(tradingsymbol=symbol,
+                            exchange=kite.EXCHANGE_NSE,
+                            transaction_type=kite.TRANSACTION_TYPE_BUY,
+                            quantity=quantity,
+                            order_type=kite.ORDER_TYPE_SLM,
+                            product=kite.PRODUCT_MIS,
+                            trigger_price=round(trigger,1),
+                            #stoploss=round(stoploss,1),
+                            #price=price,
+                            variety=kite.VARIETY_REGULAR
+                            )
+    logger.info("Order placed. ID is: {}".format(order_id))
+  except Exception as e:
+    logger.info("Order placement failed: {}".format(e.message))
+        
+def sell_slm(symbol, price, trigger, quantity=1):
+    
+  logger.info('%12s'%"SELL SLM: "+symbol+", price: "+str('%0.2f'%price)+", stoploss: "+str('%0.2f'%stoploss)+", quantity: "+str(quantity))
+
+  try:
+    order_id = kite.place_order(tradingsymbol=symbol,
+                        exchange=kite.EXCHANGE_NSE,
+                        transaction_type=kite.TRANSACTION_TYPE_SELL,
+                        quantity=quantity,
+                        order_type=kite.ORDER_TYPE_SLM,
+                        product=kite.PRODUCT_MIS,
+                        trigger_price=round(trigger,1),
+                        #price=price,
+                        variety=kite.VARIETY_REGULAR)
+    logger.info("Order placed. ID is: {}".format(order_id))
+  except Exception as e:
+    logger.info("Order placement failed: {}".format(e.message))
+
+def buy_bo(symbol, price, trigger, stoploss, squareoff, quantity=1, tag="bot"): 
+  pinfo('%12s'%"BUY BO: "+symbol+", price: "+str('%0.2f'%price)+", squareoff: "+str('%0.2f'%squareoff)+", stoploss: "+str('%0.2f'%stoploss)+", quantity: "+str(quantity))
+  
+  try:
+    order_id = kite.place_order(tradingsymbol=symbol, exchange=kite.EXCHANGE_NSE, transaction_type=kite.TRANSACTION_TYPE_BUY,
+                    order_type=kite.ORDER_TYPE_LIMIT, product=kite.PRODUCT_MIS, variety=kite.VARIETY_BO, 
+                            quantity=quantity, trigger_price=trigger, price=price,
+                            squareoff=squareoff,  stoploss=stoploss, tag=tag )
+    logger.info("Order placed. ID is: {}".format(order_id))
+  except Exception as e:
+    logger.info("Order placement failed: {}".format(e.message))
+
+
+
+def sell_bo(symbol, price, trigger, stoploss, squareoff, quantity=1, tag="bot"): 
+    pinfo('%12s'%"SELL BO: "+symbol+", price: "+str('%0.2f'%price)+", squareoff: "+str('%0.2f'%squareoff)+", stoploss: "+str('%0.2f'%stoploss)+", quantity: "+str(quantity))
+    if papertrade:
+        return
+    
+    try:
+        order_id = kite.place_order(tradingsymbol=symbol, exchange=kite.EXCHANGE_NSE, transaction_type=kite.TRANSACTION_TYPE_SELL,
+                                order_type=kite.ORDER_TYPE_LIMIT, product=kite.PRODUCT_MIS, variety=kite.VARIETY_BO,
+                                quantity=quantity, trigger_price=trigger, price=price,
+                                stoploss=stoploss, squareoff=squareoff,  tag=tag )
+        logger.info("Order placed. ID is: {}".format(order_id))
+    except Exception as e:
+        logger.info("Order placement failed: {}".format(e.message))
+        
+def getOrders():    
+  # Fetch all orders
+  return pd.DataFrame(kite.orders())
+
+def cancelOrder(orderId):
+  try:
+    kite.cancel_order(variety=kite.VARIETY_REGULAR, order_id=orderId, parent_order_id=None)    
+  except Exception as e:
+    logger.info("Order Cancellation failed: {}".format(e.message))
+
+#TODO: Modify this function for SLM     
+def squareoff(symbol=None, tag="bot"):
+  pinfo('%12s'%"Squareoff: "+symbol)
+
+  orders_df = pd.DataFrame(kite.orders())
+  if symbol != None:
+    open_orders = orders_df[(orders_df['tradingsymbol']==symbol) & (orders_df['status'] == 'TRIGGER PENDING')  & (orders_df['tag'] == tag)]
+  else:
+    open_orders = orders_df[(orders_df['status'] == 'TRIGGER PENDING')  & (orders_df['tag'] == tag)]
+      
+  for index, row in open_orders.iterrows():
+    pinfo(row.order_id, row.parent_order_id)
+    kite.exit_order(variety=kite.VARIETY_BO, order_id=order_id, parent_order_id=parent_order_id)
+
+ 
+###################################################
+### Kite CallBack functions                     ###
+###################################################
+def initTrade(ws):
+  ws.cache = cache_state(cache_id)
+
+def on_ticks(ws, ticks):
+  # Callback to receive ticks.
+  #logging.debug("Ticks: {}".format(ticks))
+  for tick in ticks:
+    notification_despatcher(ws, tick)
+
+
+def on_connect(ws, response):
+  initTrade(ws)
+  # Callback on successful connect.
+  # Subscribe to a list of instrument_tokens (RELIANCE and ACC here).
+  #ws.subscribe([225537])
+
+  # Set RELIANCE to tick in `full` mode.
+  # MODE_LTP, MODE_QUOTE, or MODE_FULL
+
+  #ws.set_mode(ws.MODE_LTP, [225537])
+  #ws.set_mode(ws.MODE_FULL, [225537]) 
+  #ws.set_mode(ws.MODE_LTP, [225537, 3861249]) 
+  #ws.set_mode(ws.MODE_MODE_QUOTE, [2714625,779521]) 
+
+def on_close(ws, code, reason):
+  # On connection close stop the main loop
+  # Reconnection will not happen after executing `ws.stop()`
+  ws.stop()
+
+def on_order_update(ws, data):
+  #logger.info("New Order Update")
+  notification_despatcher(ws,data, Tick=False)

@@ -2,12 +2,14 @@ import pandas as pd
 from lib.layout_bootstrap import *
 from flask import Flask, render_template, request
 from collections import deque
-from lib.logging_lib import pdebug, pdebug1, pdebug5, perror, pinfo, redis_conn, cache_type
+from lib.logging_lib import pdebug, pdebug1, pdebug5, perror, pinfo, redis_conn, cache_type, cache_id
 from lib.charting_lib import *
 from lib.multitasking_lib import trade_analysis_raw
 import json
+import os
 
 app = Flask(__name__)
+app.secret_key = os.urandom(24)
 
 dash_app = dash.Dash(__name__, server=app, external_stylesheets=external_stylesheets)
 dash_app.layout = layout_bootstrap
@@ -243,3 +245,111 @@ def add_row(value, ts, rows, columns):
         return df.to_dict('records'), [{"name": i, "id": i} for i in df.columns]
     else:
         return [],[{}]
+
+
+
+########################### Kite Login ###########################
+import os
+import json
+import logging
+from datetime import date, datetime
+from decimal import Decimal
+
+from flask import Flask, request, jsonify, session
+from kiteconnect import KiteConnect
+
+logging.basicConfig(level=logging.DEBUG)
+
+# Base settings
+#PORT = 5010
+HOST = "127.0.0.1"
+
+serializer = lambda obj: isinstance(obj, (date, datetime, Decimal)) and str(obj)  # noqa
+
+# Kite Connect App settings. Go to https://developers.kite.trade/apps/
+# to create an app if you don't have one.
+kite_api_key = 'b2w0sfnr1zr92nxm'
+kite_api_secret = 'jtga2mp2e5fn29h8w0pe2kb722g3dh1q'
+
+# Create a redirect url
+redirect_url = "http://{host}/login".format(host=HOST)
+
+# Login url
+login_url = "https://kite.trade/connect/login?api_key={api_key}".format(api_key=kite_api_key)
+
+# Kite connect console url
+console_url = "https://developers.kite.trade/apps/{api_key}".format(api_key=kite_api_key)
+
+
+def get_kite_client():
+    """Returns a kite client object
+    """
+    kite = KiteConnect(api_key=kite_api_key)
+    if "access_token" in session:
+        kite.set_access_token(session["access_token"])
+    return kite
+
+# Templates
+index_template = """
+    <div>Make sure your app with api_key - <b>{api_key}</b> has set redirect to <b>{redirect_url}</b>.</div>
+    <div>If not you can set it from your <a href="{console_url}">Kite Connect developer console here</a>.</div>
+    <a href="{login_url}"><h1>Login to generate access token.</h1></a>"""
+
+login_template = """
+    <h2 style="color: green">Success</h2>
+    <div>Access token: <b>{access_token}</b></div>
+    <h4>User login data</h4>
+    <pre>{user_data}</pre>
+    <a target="_blank" href="/holdings.json"><h4>Fetch user holdings</h4></a>
+    <a target="_blank" href="/orders.json"><h4>Fetch user orders</h4></a>
+    <a target="_blank" href="https://localhost"><h4>Start Trading with Freedom</h4></a>"""
+
+
+@app.route("/oauth")
+def index():
+    return index_template.format(
+        api_key=kite_api_key,
+        redirect_url=redirect_url,
+        console_url=console_url,
+        login_url=login_url
+    )
+
+@app.route("/login")
+def login():
+    request_token = request.args.get("request_token")
+
+    if not request_token:
+        return """
+            <span style="color: red">
+                Error while generating request token.
+            </span>
+            <a href='/'>Try again.<a>"""
+
+    kite = get_kite_client()
+    data = kite.generate_session(request_token, api_secret=kite_api_secret)
+    access_token = data["access_token"]
+    session["access_token"] = access_token
+    cache_live = cache_state(cache_id)
+    cache_live.set('access_token', access_token)
+    kite.set_access_token(access_token)
+
+    return login_template.format(
+        access_token=access_token,
+        user_data=json.dumps(
+            data,
+            indent=4,
+            sort_keys=True,
+            default=serializer
+        )
+    )
+
+@app.route("/holdings.json")
+def holdings():
+    kite = get_kite_client()
+    return jsonify(holdings=kite.holdings())
+
+
+@app.route("/orders.json")
+def orders():
+    kite = get_kite_client()
+    return jsonify(orders=kite.orders())
