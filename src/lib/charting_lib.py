@@ -66,11 +66,6 @@ def render_charts(data, trade, symbol, chart_type='haikin'):
         return ''
 
     xaxis_len = data.shape[0] - 95
-    #pinfo(price.tail(1).index)
-    #pinfo(price.tail(30).head(1).index)
-
-    #x_min = price.tail(30).head(1).index
-    #x_max = price.tail(1).index
 
     range_min = min(80, xaxis_len)
     xMin = data.index[-1*range_min]

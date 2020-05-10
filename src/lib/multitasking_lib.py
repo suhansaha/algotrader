@@ -53,11 +53,14 @@ class myThread (threading.Thread):
                 pubsub.unsubscribe()
                 break
             else:
-                callback(self.manager, msg)
+                self.workerThread = myThread(self.manager, self.name+'_worker', self.callback, False, msg)
+                self.workerThread.run()
+
+        self.workerThread.join()
     
     #The thread function for one of tasks
     def thread_worker(self, callback):
-        callback(self.msg)
+        callback(self.manager, self.msg)
 
 jobs = []
 cache_postfix = ""
@@ -83,17 +86,27 @@ class threadManager():
         for tName in self.threadList:
             self.add(tName, self.threadCallback[self.threadID-1])
 
+        #self.add('watchdog', thread_watchdog)
+
         # Wait for all threads to complete
-        #for t in self.threads:
-        #    t.join()
-        #pinfo("Exiting Main Thread")
+        for t in self.threads:
+            t.join()
+        pinfo("Exiting Main Thread")
         
     def add(self, name, callback, pubsub=True, cmd=""):
         # Create an instance of mythrade class and start the thread
+        #pinfo('In thread manager add: {}'.format(name))
         thread = myThread(self, name, callback, pubsub, cmd)
+
+        #pinfo(cmd)
         thread.start()
         self.threads.append(thread)
         self.threadID += 1
+
+def thread_watchdog():
+    pinfo('in thread watchdog')
+    pinfo(self)
+
 
 
 ######################################################
@@ -340,8 +353,8 @@ def quick_backtest(data, ohlc_data, cache, exchange):
         toDate = temp_df.index[-1].strftime('%Y-%m-%d')
         fromDate = (temp_df.index[0] - deltaT).strftime('%Y-%m-%d')
 
-        pinfo(toDate)
-        pinfo(fromDate)
+        #pinfo(toDate)
+        #pinfo(fromDate)
         pre_data = getData(stock_key, fromDate, toDate, exchange, hdf_freq, False, stock_key)
 
         cache.setOHLC(stock_key, pre_data)
@@ -396,7 +409,7 @@ def kite_simulator(manager, msg):
 
 trade_job_sem = Semaphore(10)
 def ohlc_tick_handler(manager, msg):
-    pdebug1('ohlc_tick_handler: {}'.format(msg))
+    pdebug('ohlc_tick_handler: {}'.format(msg))
 
     # Step 0: Clean queue
     cache.delete('msgBufferQueue'+cache_postfix)
@@ -480,7 +493,7 @@ def ohlc_tick_handler(manager, msg):
 
             ohlc_handler_sem.release()
 
-def trade_job(hash_key):
+def trade_job(manager, hash_key):
     pdebug1('trade_job: {}'.format(hash_key))
     
     stock = cache.getValue(hash_key,'stock')
@@ -708,7 +721,7 @@ def freedom_init(manager, msg):
     cache.set('done'+cache_type,1)
     backtest_manager = threadManager(cache_type, ["kite_simulator","ohlc_tick_handler"], [kite_simulator, ohlc_tick_handler])
 
-    live_manager = threadManager(cache_id, ["ohlc_tick_handler","tick_resampler","order_handler"], [ohlc_tick_handler, tick_resampler, order_handler])
+    #live_manager = threadManager(cache_id, ["ohlc_tick_handler","tick_resampler","order_handler"], [ohlc_tick_handler, tick_resampler, order_handler])
 
     # 2: Start kite websocket connections
     # Initialise
