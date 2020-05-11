@@ -35,6 +35,9 @@ def store_algo(algo, algo_name="default"):
 def start_backtest(n_clicks, stocks, qty, sl, target, start_date, end_date, algo, freq, algo_name, mode ):
     toDate = end_date
     fromDate = start_date
+
+    if n_clicks == 0:
+        return 0
     
     #pinfo(len(mode))
 
@@ -276,31 +279,33 @@ def add_row(value, ts, rows, columns):
 
 
 @dash_app.callback(
-    Output("live-start", "active"),
-    [Input('live-start', 'n_clicks')] )
-def start_trade(n_clicks):
-    pinfo('Start Trade')
+    [Output("live-start", "disabled"), Output("live-stop", "disabled")],
+    [Input('live-start', 'n_clicks'), Input('live-stop', 'n_clicks')],
+    [State('live-start', 'disabled'),State('live-stop', 'disabled')] )
+def toggle_trade(n1, n2, d1, d2):
     live_cache = cache_state(cache_id)
-    if n_clicks % 2 == 1:
-        live_cache = cache_state(cache_id)
-        live_cache.publish('live_trade_handlerlive', 'INIT')
-        return True
-    else:
-        return False
-
-
-@dash_app.callback(
-    Output("live-stop", "active"),
-    [Input('live-stop', 'n_clicks')] )
-def start_trade(n_clicks):
-    live_cache = cache_state(cache_id)
-    if n_clicks % 2 == 1:
+    if n1 > 0 and d1 == True: #Trade is onoging
         pinfo('Stop Trade')
-        live_cache = cache_state(cache_id)
         live_cache.publish('live_trade_handlerlive', 'CLOSE')
-        return True
-    else:
-        return False
+        return False, True
+    elif  d2 == True: # Trade is stopped
+        pinfo('Start Trade')
+        live_cache.publish('live_trade_handlerlive', 'INIT')
+        return True, False
+
+
+#@dash_app.callback(
+#    Output("live-stop", "active"),
+#    [Input('live-stop', 'n_clicks')] )
+#def start_trade(n_clicks):
+#    live_cache = cache_state(cache_id)
+#    if n_clicks % 2 == 1:
+#        pinfo('Stop Trade')
+#        live_cache = cache_state(cache_id)
+#        live_cache.publish('live_trade_handlerlive', 'CLOSE')
+#        return True
+#    else:
+#        return False
 
 ########################### Kite Login ###########################
 import os

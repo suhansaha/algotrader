@@ -255,6 +255,7 @@ def trade_init(stock_key, data):
     qty = data['qty']
     freq = data['freq']
     algo = data['algo']
+    mode = data['mode']
 
     if freq == '1D':
         hdf_freq='day'
@@ -270,6 +271,7 @@ def trade_init(stock_key, data):
     cache.setValue(stock_key, 'Total P&L', 0)
     cache.setValue(stock_key, 'price', 0)
     cache.setValue(stock_key, 'hdf_freq', hdf_freq)
+    cache.setValue(stock_key, 'mode', mode)
 
     #cache.set(stock_key, pd.DataFrame().to_json(orient='columns')) #Used for plotting
     
@@ -535,7 +537,9 @@ def ohlc_tick_handler(manager, msg):
                     cache.set('last_id_msg', msg[0])
                 
                 # Start job to process Tick
-                if manager.abort == False and manager.pause == False:
+                mode = cache.getValue(stock_id,'mode')
+                #pinfo(mode)
+                if manager.abort == False and manager.pause == False and mode != 'PAUSE':
                     trade_job_sem.acquire()
                     manager.add(stock_id, trade_job, False, hash_key)
                 
@@ -545,7 +549,7 @@ def trade_job(manager, hash_key):
     if manager.abort == True or manager.pause == True:
         return
 
-    pdebug('trade_job: {}'.format(hash_key))
+    pdebug1('trade_job: {}'.format(hash_key))
     
     stock = cache.getValue(hash_key,'stock')
 
@@ -698,21 +702,25 @@ def placeorder(prefix, df, stock, last_processed):
         sl = ltp[0] * ( 1 - sl_pt / 100 )
         tp =  ltp[0] * ( 1 + tp_pt / 100 )
         price = ltp[0] 
+        cache.publish('live_trade_handlerlive',json.dumps({'cmd':'buy','symbol':stock,'price':price,'qty':qty}))
     elif prefix == "B: EX: " or prefix == "B: SL: " or prefix == "B: TP: ":
         tmp_df['buy'] = ltp
         profit = (price - ltp[0]) * qty
         pl_pt = profit/price * 100
         price = 0
+        cache.publish('live_trade_handlerlive',json.dumps({'cmd':'buy','symbol':stock,'price':price,'qty':qty}))
     elif prefix == "S: EN: ":
         tmp_df['sell'] = ltp
         sl = ltp[0] * ( 1 + sl_pt / 100 )
         tp =  ltp[0] * ( 1 - tp_pt / 100 )
         price = ltp[0] 
+        cache.publish('live_trade_handlerlive',json.dumps({'cmd':'sell','symbol':stock,'price':price,'qty':qty}))
     elif prefix == "S: EX: " or prefix == "S: SL: " or prefix == "S: TP: ":
         tmp_df['sell'] = ltp
         profit = (ltp[0] - price) * qty
         pl_pt = profit/price * 100
         price = 0
+        cache.publish('live_trade_handlerlive',json.dumps({'cmd':'sell','symbol':stock,'price':price,'qty':qty}))
 
     totalprofit = totalprofit + profit
 
@@ -766,37 +774,40 @@ def live_trade_handler(manager, msg):
     elif msg == 'profile':
         pinfo(kite.profile())
     else:
-        msg_j = json.loads(msg)
-        cmd = msg_j['cmd']        
-        if cmd == 'add':
-            value = msg_j['value']
-            mode_map = {'ltp':kws.MODE_LTP, 'full':kws.MODE_FULL, 'quote': kws.MODE_QUOTE}
-            mode = mode_map[msg_j['mode']]
+        try:
+            msg_j = json.loads(msg)
+            cmd = msg_j['cmd']        
+            if cmd == 'add':
+                value = msg_j['value']
+                mode_map = {'ltp':kws.MODE_LTP, 'full':kws.MODE_FULL, 'quote': kws.MODE_QUOTE}
+                mode = mode_map[msg_j['mode']]
 
-            pinfo('Subscribe: {}: {}: {}'.format(cmd, mode, msg))
-            kws.subscribe(value)
-            kws.set_mode(mode, value)
-        elif cmd == 'remove':
-            value = msg_j['value']
-            pinfo('Un-Subscribe: {}: {}'.format(cmd, msg))
-            kws.unsubscribe(value)
-        elif cmd == 'mode':
-            value = msg_j['value']
-            mode_map = {'ltp':kws.MODE_LTP, 'full':kws.MODE_FULL, 'quote': kws.MODE_QUOTE}
-            pinfo('Set Mode: {}: {}'.format(cmd, msg))
-            kws.set_mode(mode, value)            
-        elif cmd == 'buy':
-            symbol = msg_j['symbol']
-            price = float(msg_j['price'])
-            quantity = int(msg_j['qty'])
-            pinfo('Placeorder-{}: {}: {}: {}'.format(cmd, symbol, price, quantity))
-            buy_limit(symbol, price, quantity)
-        elif cmd == 'sell':
-            symbol = msg_j['symbol']
-            price = float(msg_j['price'])
-            quantity = int(msg_j['qty'])
-            pinfo('Placeorder-{}: {}: {}: {}'.format(cmd, symbol, price, quantity))
-            sell_limit(symbol, price, quantity)
+                pinfo('Subscribe: {}: {}: {}'.format(cmd, mode, msg))
+                kws.subscribe(value)
+                kws.set_mode(mode, value)
+            elif cmd == 'remove':
+                value = msg_j['value']
+                pinfo('Un-Subscribe: {}: {}'.format(cmd, msg))
+                kws.unsubscribe(value)
+            elif cmd == 'mode':
+                value = msg_j['value']
+                mode_map = {'ltp':kws.MODE_LTP, 'full':kws.MODE_FULL, 'quote': kws.MODE_QUOTE}
+                pinfo('Set Mode: {}: {}'.format(cmd, msg))
+                kws.set_mode(mode, value)            
+            elif cmd == 'buy':
+                symbol = msg_j['symbol']
+                price = float(msg_j['price'])
+                quantity = int(msg_j['qty'])
+                pinfo('Placeorder-{}: {}: {}: {}'.format(cmd, symbol, price, quantity))
+                buy_limit(symbol, price, quantity)
+            elif cmd == 'sell':
+                symbol = msg_j['symbol']
+                price = float(msg_j['price'])
+                quantity = int(msg_j['qty'])
+                pinfo('Placeorder-{}: {}: {}: {}'.format(cmd, symbol, price, quantity))
+                sell_limit(symbol, price, quantity)
+        except:
+            pass
 
 
 def order_handler(manager, msg):
@@ -832,7 +843,11 @@ def freedom_init(manager, msg):
 
 def buy_limit(symbol, price, quantity=1): 
     global kite
-    pinfo("B Limit: {}[{}]=> {}".format(symbol, quantity, price))
+    logtrade("B Limit: {}[{}]=> {}".format(symbol, quantity, price))
+
+    mode = cache.getValue(symbol,'mode')
+    if mode != 'live':
+        return
 
     KiteAPIKey = cache.get('KiteAPIKey')
     kite = KiteConnect(api_key=KiteAPIKey)
@@ -859,7 +874,11 @@ def buy_limit(symbol, price, quantity=1):
         
 def sell_limit(symbol, price, quantity=1):
     global kite
-    pinfo("S Limit: {}[{}]=> {}".format(symbol, quantity, price))
+    logtrade("S Limit: {}[{}]=> {}".format(symbol, quantity, price))
+    
+    mode = cache.getValue(symbol,'mode')
+    if mode != 'live':
+        return
 
     KiteAPIKey = cache.get('KiteAPIKey')
     kite = KiteConnect(api_key=KiteAPIKey)
@@ -876,7 +895,8 @@ def sell_limit(symbol, price, quantity=1):
                             #trigger_price=round(trigger,1),
                             #trigger_price=round(price,1),
                             price=price,
-                            variety=kite.VARIETY_REGULAR)
+                            variety=kite.VARIETY_REGULAR),
+                            tag='freedom_v2'
         pinfo("Order placed. ID is: {}".format(order_id))
     except:
         pinfo("Order placement failed: {}".format(sys.exc_info()[0]))
@@ -908,16 +928,52 @@ def sell_bo(symbol, price, trigger, stoploss, squareoff, quantity=1, tag="bot"):
         logger.info("Order placed. ID is: {}".format(order_id))
     except Exception as e:
         logger.info("Order placement failed: {}".format(e.message))
-        
+
+
+def cancel_all_order():
+    orders_df = pd.DataFrame(kite.orders())
+    
+    #TODO: change status to OPEN
+    orders_df = orders_df.loc[(orders_df['status']=='COMPLETE'), ['order_id','status','tradingsymbol','transaction_type','quantity']]
+    for i, r in orders_df.iterrows():
+            order_id = r['order_id']
+            qty = r['quantity']
+            transaction_type = 'SELL' if r['transaction_type'] == 'BUY' else 'BUY'
+            #print(transaction_type)
+            #print(qty)
+            #print(r)
+            cancelOrder(order_id)
+            #TODO: Call function for exit order
+    
+def cancel_order(stocks=None):
+    orders_df = pd.DataFrame(kite.orders())
+    for stock in stocks:
+        #TODO: change status to OPEN
+        tmp_df = orders_df.loc[(orders_df['tradingsymbol']==stock) & (orders_df['status']=='COMPLETE'), ['order_id','status','tradingsymbol','transaction_type','quantity']]
+        #print(tmp_df)
+        for i, r in tmp_df.iterrows():
+            order_id = r['order_id']
+            qty = r['quantity']
+            transaction_type = 'SELL' if r['transaction_type'] == 'BUY' else 'BUY'
+            cancelOrder(order_id)
+            #print(r)
+            #print(qty)
+            #print(order_id)
+            #TODO: Call function for exit order
+
 def getOrders():    
   # Fetch all orders
   return pd.DataFrame(kite.orders())
 
 def cancelOrder(orderId):
-  try:
-    kite.cancel_order(variety=kite.VARIETY_REGULAR, order_id=orderId, parent_order_id=None)    
-  except Exception as e:
-    logger.info("Order Cancellation failed: {}".format(e.message))
+    KiteAPIKey = cache.get('KiteAPIKey')
+    kite = KiteConnect(api_key=KiteAPIKey)
+    access_token = cache.get('access_token')
+    kite.set_access_token(access_token)
+    try:
+        kite.cancel_order(variety=kite.VARIETY_REGULAR, order_id=orderId, parent_order_id=None)    
+    except Exception as e:
+        logger.info("Order Cancellation failed: {}".format(e.message))
 
 #TODO: Modify this function for SLM     
 def squareoff(symbol=None, tag="bot"):

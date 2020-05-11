@@ -153,8 +153,8 @@ trade_tab = dbc.Row([
     dbc.Col( 
         [dbc.Row(dbc.Col(dcc.Dropdown(id='stock_picker_live', multi=True,  className='columns six', options=stock_options))),
          dbc.Row([dbc.Col( [dbc.Button("Start", id="live-start",color="success"),
-                            dbc.Button("Pause", id="live-pause",color="warning"),
-                            dbc.Button("Stop", id="live-stop",color="danger")]),
+                            #dbc.Button("Pause", id="live-pause",color="warning"),
+                            dbc.Button("Stop", id="live-stop",color="danger", disabled=True)]),
                    ]),
          dbc.Row(dbc.Col(trade_table, style={'padding-left':'20px'}))
         ]
