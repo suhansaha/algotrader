@@ -76,7 +76,7 @@ def render_charts(data, trade, symbol, chart_type='haikin'):
 
 
     freq = redis_conn.hget(symbol+cache_type_global, 'freq')
-
+    #pinfo(freq)
     if freq != '1D':
         range_break = [{'pattern': 'hour', 'bounds': [16, 9]}, {'bounds': ['sat', 'mon']}]
     else:
@@ -152,7 +152,7 @@ def freedom_chart(symbol, cache_type, chart_type='haikin'):
 
     trade_df = pd.read_json(redis_conn.get(symbol+cache_type+'Trade'), orient='columns')
 
-    trade_df = trade_df.tail(500) # safety for algo on longer durations
-    dfohlc = dfohlc.tail(500)
+    trade_df = trade_df.tail(2500) # safety for algo on longer durations
+    dfohlc = dfohlc.tail(2500)
 
     return render_charts(dfohlc, trade_df, symbol, chart_type)

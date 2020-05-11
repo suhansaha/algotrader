@@ -3,7 +3,6 @@ services:
   web:
     image: suhansaha/talib_kite-alpine
     command: gunicorn --worker-class eventlet -w 1 --bind 0.0.0.0:5000 --reload wsgi:app
-    restart: always
     volumes:
       - ./src:/code
     expose:

@@ -16,6 +16,7 @@ import json
 import ast
 from datetime import datetime, timedelta
 import time
+import sys
 
 logger.setLevel(logging.DEBUG)
 #logger.setLevel(1)
@@ -225,7 +226,7 @@ def msg_to_ohlc(data):
 
 # This function is called by Kite or Kite_Simulation
 def notification_despatcher(ws, msg, id='*', Tick=True ):
-    pdebug('notification_despatcher:{}=>{}'.format(id,msg))
+    pdebug1('notification_despatcher:{}=>{}'.format(id,msg))
     # Step 1: Extract msg type: Tick/Callbacks
     
     # Step 2.1: If Tick
@@ -286,36 +287,45 @@ def full_simulation(data, ohlc_data, cache, exchange, manager):
     stream_id = lambda x,y:str(int(x.timestamp()+y)*1000)+'-0'
     cache.delete('msgBufferQueue'+cache_postfix)
     cache.delete('notificationQueue'+cache_postfix)
+    #pinfo(data['stock'])
     for i in np.linspace(0,no-1,no): # Push data
         if manager.abort == True:
             pinfo('Abort Request: Full Simulation')
             return
 
         i = int(i)
-        msg_dict_open = {}
-        msg_dict_high = {}
-        msg_dict_low = {}
-        msg_dict_close = {}
+        msg_dict_open = []
+        msg_dict_high = []
+        msg_dict_low = []
+        msg_dict_close = []
         for stock in data['stock']:
+            #pinfo(stock)
             row = ohlc_data[stock].iloc[i]
             index = ohlc_data[stock].index[i]
             
+            instrument_token = int(cache.hmget('eq_token',stock)[0])
+
             #stream_id = str(int(index.timestamp())*1000)+'-0'
-            msg = {exchange+":"+stock:json.dumps({"last_price":row['open']})}
-            msg_dict_open.update(msg)
+            msg = {'instrument_token':instrument_token,"last_price":row['open']}
+            msg_dict_open.append(msg)
             
             #stream_id = str(int(index.timestamp())*1000)+'-0'
-            msg = {exchange+":"+stock:json.dumps({"last_price":row['high']})}
-            msg_dict_high.update(msg)
+            msg = {'instrument_token':instrument_token,"last_price":row['high']}
+            #msg = {exchange+":"+stock:json.dumps({"last_price":row['high']})}
+            msg_dict_high.append(msg)
             
             #stream_id = str(int(index.timestamp())*1000)+'-0'
-            msg = {exchange+":"+stock:json.dumps({"last_price":row['low']})}
-            msg_dict_low.update(msg)
+            msg = {'instrument_token':instrument_token,"last_price":row['low']}
+            #msg = {exchange+":"+stock:json.dumps({"last_price":row['low']})}
+            msg_dict_low.append(msg)
             
             #stream_id = str(int(index.timestamp())*1000)+'-0'
-            msg = {exchange+":"+stock:json.dumps({"last_price":row['close']})}
-            msg_dict_close.update(msg)
-            
+            msg = {'instrument_token':instrument_token,"last_price":row['close']}
+            #msg = {exchange+":"+stock:json.dumps({"last_price":row['close']})}
+            msg_dict_close.append(msg)
+        
+        #pinfo(msg_dict_open)
+
         ohlc_handler_sem.acquire()
         notification_despatcher(None, msg_dict_open, id=stream_id(index,5))
         ohlc_handler_sem.acquire()
@@ -326,7 +336,7 @@ def full_simulation(data, ohlc_data, cache, exchange, manager):
         notification_despatcher(None, msg_dict_close, id=stream_id(index,30))
 
         counter = counter + 4
-            
+
     pinfo('Kite_Simulator: Done: {}'.format(counter))
 
     notification_despatcher(None, 'done')
@@ -453,7 +463,7 @@ def ohlc_tick_handler(manager, msg):
         
         # Step 3: Process tick: Start a worker thread for each msg       
         for msg in msgs_q[0][1]:
-            pdebug('ohlc_tick_handler: {}'.format(msg[1]))
+            pdebug1('ohlc_tick_handler: {}'.format(msg[1]))
             counter = counter + 1
             val = json.loads(msg[1]['data'])
             if val == 'done':
@@ -469,22 +479,25 @@ def ohlc_tick_handler(manager, msg):
             #stock = []
             #ltp = []
             #date = []
-            for key, data in val.items():
-                stock_id = key.split(':')[1]
-                exchange = key.split(':')[0]
-                ltp = json.loads(data)['last_price']
+            for data in val:
+                #{'data': '{"tradable": true, "mode": "quote", "instrument_token": 969473, "last_price": 185.0, "last_quantity": 6, "average_price": 187.11, "volume": 4319803, "buy_quantity": 469701, "sell_quantity": 539438, "ohlc": {"open": 185.0, "high": 189.95, "low": 184.1, "close": 184.0}, "change": 0.5434782608695652}'}
+                instrument_token = int(data['instrument_token'])
+                stock_id = cache.hmget('eq_token',instrument_token)[0]
+                
+                
+                ltp = data['last_price']
                 temp_df = pd.DataFrame(data={'date':[date_val],'ltp':[ltp]})
                 temp_df = temp_df.set_index('date')
                 temp_df.index = pd.to_datetime(temp_df.index)
-
-
+                #pinfo(stock_id)
+                #pinfo(ltp)
                 hash_key = stock_id
                 hdf_freq = cache.getValue(hash_key,'hdf_freq')
                 state = cache.getValue(hash_key,'state')
 
                 #pdebug('TH: {} =>{}'.format(hash_key, state))
                 #temp_df = msg_to_ohlc(data)
-                if state == 'INIT': # State: Init: Load historical data from cache
+                if state == 'INIT5': # State: Init: Load historical data from cache
                     # 1: Populate Redis buffer stock+"OHLCBuffer" with historical data
                     deltaT = getDeltaT(hdf_freq)
 
@@ -533,7 +546,7 @@ def trade_job(manager, hash_key):
     tp = float(cache.getValue(hash_key,'tp'))
     sl = float(cache.getValue(hash_key,'sl'))
 
-    #pdebug("{}: {}: {}".format(hash_key, stock, state ))
+    pdebug1("{}: {}: {}".format(hash_key, stock, state ))
     ohlc_df = cache.getOHLC(hash_key)
 
     ltp = float(ohlc_df.iloc[-1:]['close'][0])
@@ -702,7 +715,7 @@ def placeorder(prefix, df, stock, last_processed):
     tmp_df['mode'] = prefix
     cache.pushTrade(stock, tmp_df)
 
-
+import json
 kws = None
 kite = None
 kite_api_key = 'b2w0sfnr1zr92nxm'
@@ -725,6 +738,7 @@ def live_trade_handler(manager, msg):
             kws.on_connect = on_connect
             kws.on_order_update = on_order_update
             cache.publish('ohlc_tick_handler'+cache_id,'start')
+            kws.connect(threaded=True)
         except Exception as e:
             perror('Could not connect to KITE server: {}'.format(e))
     elif msg == 'START':
@@ -735,15 +749,33 @@ def live_trade_handler(manager, msg):
         kws.close()
     elif msg == 'profile':
         pinfo(kite.profile())
-    elif msg == 'add':
-        kws.subscribe([225537, 3861249])
-        kws.set_mode(kws.MODE_QUOTE, [225537,3861249])
-    elif msg == 'remove':
-        kws.unsubscribe([3861249])
-        #kws.set_mode(kws.MODE_LTP, [225537,3861249])
     else:
-        #TODO: Implement subscribe, unsubscribe etc
-        pass
+        msg_j = json.loads(msg)
+        cmd = msg_j['cmd']        
+        if cmd == 'add':
+            value = msg_j['value']
+            mode_map = {'ltp':kws.MODE_LTP, 'full':kws.MODE_FULL, 'quote': kws.MODE_QUOTE}
+            mode = mode_map[msg_j['mode']]
+
+            pinfo('Subscribe: {}: {}: {}'.format(cmd, mode, msg))
+            kws.subscribe(value)
+            kws.set_mode(mode, value)
+        elif cmd == 'remove':
+            value = msg_j['value']
+            pinfo('Un-Subscribe: {}: {}'.format(cmd, msg))
+            kws.unsubscribe(value)
+        elif cmd == 'buy':
+            symbol = msg_j['symbol']
+            price = float(msg_j['price'])
+            quantity = int(msg_j['qty'])
+            pinfo('Placeorder-{}: {}: {}: {}'.format(cmd, symbol, price, quantity))
+            buy_limit(symbol, price, quantity)
+        elif cmd == 'sell':
+            symbol = msg_j['symbol']
+            price = float(msg_j['price'])
+            quantity = int(msg_j['qty'])
+            pinfo('Placeorder-{}: {}: {}: {}'.format(cmd, symbol, price, quantity))
+            sell_limit(symbol, price, quantity)
 
 
 def order_handler(manager, msg):
@@ -777,42 +809,56 @@ def freedom_init(manager, msg):
 ### Kite Order functions                        ###
 ###################################################
 
-def buy_slm(symbol, price, trigger,quantity=1): 
-  logger.info('%12s'%"BUY SLM: "+symbol+", price: "+str('%0.2f'%price)+", stoploss: "+str('%0.2f'%stoploss)+", quantity: "+str(quantity))
-  
-  try:
-    order_id = kite.place_order(tradingsymbol=symbol,
-                            exchange=kite.EXCHANGE_NSE,
-                            transaction_type=kite.TRANSACTION_TYPE_BUY,
-                            quantity=quantity,
-                            order_type=kite.ORDER_TYPE_SLM,
-                            product=kite.PRODUCT_MIS,
-                            trigger_price=round(trigger,1),
-                            #stoploss=round(stoploss,1),
-                            #price=price,
-                            variety=kite.VARIETY_REGULAR
-                            )
-    logger.info("Order placed. ID is: {}".format(order_id))
-  except Exception as e:
-    logger.info("Order placement failed: {}".format(e.message))
-        
-def sell_slm(symbol, price, trigger, quantity=1):
-    
-  logger.info('%12s'%"SELL SLM: "+symbol+", price: "+str('%0.2f'%price)+", stoploss: "+str('%0.2f'%stoploss)+", quantity: "+str(quantity))
+def buy_limit(symbol, price, quantity=1): 
+    global kite
+    pinfo("B Limit: {}[{}]=> {}".format(symbol, quantity, price))
 
-  try:
-    order_id = kite.place_order(tradingsymbol=symbol,
-                        exchange=kite.EXCHANGE_NSE,
-                        transaction_type=kite.TRANSACTION_TYPE_SELL,
-                        quantity=quantity,
-                        order_type=kite.ORDER_TYPE_SLM,
-                        product=kite.PRODUCT_MIS,
-                        trigger_price=round(trigger,1),
-                        #price=price,
-                        variety=kite.VARIETY_REGULAR)
-    logger.info("Order placed. ID is: {}".format(order_id))
-  except Exception as e:
-    logger.info("Order placement failed: {}".format(e.message))
+    KiteAPIKey = cache.get('KiteAPIKey')
+    kite = KiteConnect(api_key=KiteAPIKey)
+    access_token = cache.get('access_token')
+    kite.set_access_token(access_token)
+
+    try:
+        order_id = kite.place_order(tradingsymbol=symbol,
+                                exchange=kite.EXCHANGE_NSE,
+                                transaction_type=kite.TRANSACTION_TYPE_BUY,
+                                quantity=quantity,
+                                order_type=kite.ORDER_TYPE_LIMIT,
+                                product=kite.PRODUCT_MIS,
+                                #trigger_price=round(trigger,1),
+                                #stoploss=round(stoploss,1),
+                                #trigger_price=round(price,1),
+                                price=price,
+                                variety=kite.VARIETY_REGULAR,
+                                tag='freedom_v2'
+                                )
+        pinfo("Order placed. ID is: {}".format(order_id))
+    except:
+        pinfo("Order placement failed: {}".format(sys.exc_info()[0]))
+        
+def sell_limit(symbol, price, quantity=1):
+    global kite
+    pinfo("S Limit: {}[{}]=> {}".format(symbol, quantity, price))
+
+    KiteAPIKey = cache.get('KiteAPIKey')
+    kite = KiteConnect(api_key=KiteAPIKey)
+    access_token = cache.get('access_token')
+    kite.set_access_token(access_token)
+
+    try:
+        order_id = kite.place_order(tradingsymbol=symbol,
+                            exchange=kite.EXCHANGE_NSE,
+                            transaction_type=kite.TRANSACTION_TYPE_SELL,
+                            quantity=quantity,
+                            order_type=kite.ORDER_TYPE_LIMIT,
+                            product=kite.PRODUCT_MIS,
+                            #trigger_price=round(trigger,1),
+                            #trigger_price=round(price,1),
+                            price=price,
+                            variety=kite.VARIETY_REGULAR)
+        pinfo("Order placed. ID is: {}".format(order_id))
+    except:
+        pinfo("Order placement failed: {}".format(sys.exc_info()[0]))
 
 def buy_bo(symbol, price, trigger, stoploss, squareoff, quantity=1, tag="bot"): 
   pinfo('%12s'%"BUY BO: "+symbol+", price: "+str('%0.2f'%price)+", squareoff: "+str('%0.2f'%squareoff)+", stoploss: "+str('%0.2f'%stoploss)+", quantity: "+str(quantity))
@@ -876,8 +922,8 @@ def initTrade(ws):
 def on_ticks(ws, ticks):
   # Callback to receive ticks.
   #logging.debug("Ticks: {}".format(ticks))
-  for tick in ticks:
-    notification_despatcher(ws, tick)
+  #for tick in ticks:
+  notification_despatcher(ws, ticks)
 
 
 def on_connect(ws, response):
