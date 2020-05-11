@@ -42,6 +42,7 @@ class cache_state(Redis):
         hash_key = key+self.hash_postfix
         
         if self.hlen(hash_key) == 0 or reset == True:
+            pinfo('Reset Cache for: {}'.format(hash_key))
             self.hmset(hash_key, {'stock':key, 'qty':0, 'SL %':0.0, 'TP %':0.0, 'amount':0,'price':0.0,'P&L':0.0,'P&L %':0.0,'Total P&L':0.0,'Total P&L %':0.0,
                                        'low':0.0,'sl':0.0,'ltp':0.0,'ltp %':0.0,'tp':0.0,'high':0.0,'last_processed':'1999-01-01',
                                        'state':'INIT','mode':'PAUSE','algo':'', 'freq':'1D','hdf_freq':'day'})
@@ -57,6 +58,8 @@ class cache_state(Redis):
     
     def pushCache(self, hash_key, df):
         cache_buff = pd.read_json(self.get(hash_key))
+        #pinfo(cache_buff.tail())
+        #pinfo(df.head())
         cache_buff = cache_buff.append(df)
         self.setCache(hash_key, cache_buff)
     

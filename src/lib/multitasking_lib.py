@@ -433,6 +433,7 @@ def ohlc_tick_handler(manager, msg):
     cache.delete('msgBufferQueue'+cache_postfix)
     cache.delete('notificationQueue'+cache_postfix)
     last_id_msg = '0'
+    cache.set('last_id_msg', last_id_msg)
      
     counter = 0
     while(True):
@@ -448,18 +449,22 @@ def ohlc_tick_handler(manager, msg):
         # Step 1: Blocking call to msgBufferQueue and notificationQueue
         if cache.xlen('msgBufferQueue'+cache_postfix) == 0:
             cache.xread({'msgBufferQueue'+cache_postfix:'$','notificationQueue'+cache_postfix:'$'}, block=0, count=5000)
+
+        last_id_msg = cache.get('last_id_msg')
         msgs_q = cache.xread({'msgBufferQueue'+cache_postfix:last_id_msg,'notificationQueue'+cache_postfix:'0'}, block=2000, count=5000)
         #cache.xtrim('msgBufferQueue'+cache_postfix,maxlen=0, approximate=False)
         cache.xtrim('notificationQueue'+cache_postfix,maxlen=0, approximate=False)
         
-        try:
-            last_id_msg = msgs_q[0][1][-1][0]
-        except:
-            break
-            pass
+        #try:
+            #last_id_msg = cache.get('last_id_msg')
+            #last_id_msg = msgs_q[0][1][-1][0]
+        #except:
+        #    break
         #pinfo(last_id_msg)
         # Step 2: Process notifications: Start a worker thread for each notification
         #TODO
+
+
         
         # Step 3: Process tick: Start a worker thread for each msg       
         for msg in msgs_q[0][1]:
@@ -497,16 +502,21 @@ def ohlc_tick_handler(manager, msg):
 
                 #pdebug('TH: {} =>{}'.format(hash_key, state))
                 #temp_df = msg_to_ohlc(data)
-                if state == 'INIT5': # State: Init: Load historical data from cache
+                if state == 'INIT': # State: Init: Load historical data from cache
                     # 1: Populate Redis buffer stock+"OHLCBuffer" with historical data
                     deltaT = getDeltaT(hdf_freq)
 
                     toDate = (temp_df.index[0] - timedelta(days=1)).strftime('%Y-%m-%d')
                     fromDate = (temp_df.index[0] - deltaT).strftime('%Y-%m-%d')
-                    ohlc_data = getData(stock_id, fromDate, toDate, exchange, hdf_freq, False, stock_id)
 
-                    ohlc_data = ohlc_data.tail(no_of_hist_candles)
-                    cache.setOHLC(hash_key,ohlc_data)
+                    try:
+                        exchange = 'NSE'
+                        ohlc_data = getData(stock_id, fromDate, toDate, exchange, hdf_freq, False, stock_id)
+
+                        ohlc_data = ohlc_data.tail(no_of_hist_candles)
+                        cache.setOHLC(hash_key,ohlc_data)
+                    except:
+                        pwarning('Historical data is not found {} {} {} {} {}'.format(stock_id, fromDate, toDate, exchange, hdf_freq))
 
                     cache.setValue(hash_key,'state','SCANNING')
 
@@ -515,14 +525,16 @@ def ohlc_tick_handler(manager, msg):
 
                 try:
                     cache.pushTICK(stock_id, temp_df)
+
+                    cache.set('last_id_msg', msg[0])
                 except:
-                    pass
+                    pwarning('Can not push tick data: {}:{}'.format(stock_id, temp_df))
                 
                 # Start job to process Tick
                 if manager.abort == False and manager.pause == False:
                     trade_job_sem.acquire()
                     manager.add(stock_id, trade_job, False, hash_key)
-
+                
             ohlc_handler_sem.release()
 
 def trade_job(manager, hash_key):
