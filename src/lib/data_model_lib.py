@@ -35,7 +35,7 @@ def resample(df, freq = '1T'):
 class cache_state(Redis):
     def __init__(self, postfix='backtest'):
         Redis.__init__(self, host='redis', port=6379, db=0, charset="utf-8", decode_responses=True)
-        pinfo("Cache Pointing to: "+postfix)
+        pdebug5("Cache Pointing to: "+postfix)
         self.hash_postfix = postfix
         
     def add(self, key, reset=False):
@@ -45,7 +45,7 @@ class cache_state(Redis):
             pinfo('Reset Cache for: {}'.format(hash_key))
             self.hmset(hash_key, {'stock':key, 'qty':0, 'SL %':0.0, 'TP %':0.0, 'amount':0,'price':0.0,'P&L':0.0,'P&L %':0.0,'Total P&L':0.0,'Total P&L %':0.0,
                                        'low':0.0,'sl':0.0,'ltp':0.0,'ltp %':0.0,'tp':0.0,'high':0.0,'last_processed':'1999-01-01',
-                                       'state':'INIT','mode':'PAUSE','algo':'', 'freq':'1D','hdf_freq':'day'})
+                                       'state':'INIT','mode':'PAUSE','algo':'', 'freq':'1D','hdf_freq':'day', 'order_id':0})
             # Trade Log: [{timestamp, buy, sale, amount, profit, cum_profit, W_L, Mode}]
             # Amount: -ve for Buy, +ve for sale; W_L: +1 for Win, -1 for Loss; Mode: EN|EX|SL|TP|F
             self.set(hash_key+'Trade', pd.DataFrame().to_json(orient='columns'))

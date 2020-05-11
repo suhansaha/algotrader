@@ -531,6 +531,8 @@ def ohlc_tick_handler(manager, msg):
                     cache.set('last_id_msg', msg[0])
                 except:
                     pwarning('Can not push tick data: {}:{}'.format(stock_id, temp_df))
+                finally:
+                    cache.set('last_id_msg', msg[0])
                 
                 # Start job to process Tick
                 if manager.abort == False and manager.pause == False:
@@ -543,7 +545,7 @@ def trade_job(manager, hash_key):
     if manager.abort == True or manager.pause == True:
         return
 
-    pdebug1('trade_job: {}'.format(hash_key))
+    pdebug('trade_job: {}'.format(hash_key))
     
     stock = cache.getValue(hash_key,'stock')
 
@@ -778,6 +780,11 @@ def live_trade_handler(manager, msg):
             value = msg_j['value']
             pinfo('Un-Subscribe: {}: {}'.format(cmd, msg))
             kws.unsubscribe(value)
+        elif cmd == 'mode':
+            value = msg_j['value']
+            mode_map = {'ltp':kws.MODE_LTP, 'full':kws.MODE_FULL, 'quote': kws.MODE_QUOTE}
+            pinfo('Set Mode: {}: {}'.format(cmd, msg))
+            kws.set_mode(mode, value)            
         elif cmd == 'buy':
             symbol = msg_j['symbol']
             price = float(msg_j['price'])
@@ -935,7 +942,7 @@ def initTrade(ws):
 
 def on_ticks(ws, ticks):
   # Callback to receive ticks.
-  #logging.debug("Ticks: {}".format(ticks))
+  pdebug("Ticks: {}".format(ticks))
   #for tick in ticks:
   notification_despatcher(ws, ticks)
 

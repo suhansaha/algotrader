@@ -2,7 +2,7 @@ import pandas as pd
 from lib.layout_bootstrap import *
 from flask import Flask, render_template, request
 from collections import deque
-from lib.logging_lib import pdebug, pdebug1, pdebug5, perror, pinfo, redis_conn, cache_type, cache_id
+from lib.logging_lib import pdebug, pdebug1, pdebug5, perror, pinfo, redis_conn, cache_type, cache_id, logger
 from lib.charting_lib import *
 from lib.multitasking_lib import trade_analysis_raw
 import json
@@ -204,31 +204,59 @@ def console_cmd(n_clicks, n_submit, cmd ):
     [State('table-editing-simple', 'data'),
      State('table-editing-simple', 'columns')])
 def add_row(value, ts, rows, columns):
-    live_cache = cache_state('live')
+    live_cache = cache_state(cache_id)
     df_updates = pd.DataFrame.from_dict(rows)
     df_cache = live_cache.getValue()
     
 
-    if df_updates.shape[0] > 0 and df_cache.shape[0] > 0:
-        for stock in df_cache[df_cache['stock'].isin(df_updates['stock']) == False]['stock']:
+    if df_updates.shape[0] > 0 and df_cache.shape[0] > 0: # Cache is not empty: need to distinguish new vs update
+        for stock in df_cache[ df_cache['stock'].isin(df_updates['stock']) == False]['stock']: #Stocks which are present in cache but not in GUI
             live_cache.remove(stock)
             pinfo("Removed stock: {}".format(stock))
+            #TODO: Send message to unsubscribe
 
-        for index, row in  df_updates.iterrows():
+            token = int(live_cache.hmget('eq_token',stock)[0])
+            live_cache.publish('live_trade_handlerlive', json.dumps({'cmd':'remove','value':[token], 'mode':'ltp'}))
+
+        for index, row in  df_updates.iterrows():  #Stocks which are present in cache
+            pinfo("Updated stock: {}".format(row['stock']))
             live_cache.setValue(row['stock'], 'qty', row['qty'])
             live_cache.setValue(row['stock'], 'TP %', row['TP %'])
             live_cache.setValue(row['stock'], 'SL %', row['SL %'])
             live_cache.setValue(row['stock'], 'algo', row['algo'])
             live_cache.setValue(row['stock'], 'freq', row['freq'])
             live_cache.setValue(row['stock'], 'mode', row['mode'])
-    else:
+            # TODO: If mode == Pause, continue getting ticks, only pause tradejob. Live/Paper Trade in Order Placement
+
+            
+            state = row['state']
+            prev_state = live_cache.getValue(row['stock'], 'state')
+            if state != prev_state:
+                order_id = live_cache.getValue(row['stock'], 'order_id')
+                #TODO: User initiated Buy/Sell, Cancel
+            live_cache.setValue(row['stock'], 'state', row['state'])
+
+            #else:
+            #    live_cache.add(stock)                
+            #    pinfo("Added stock: {}".format(row['stock']))
+            #    live_cache.setValue(row['stock'], 'qty', row['qty'])
+            #    live_cache.setValue(row['stock'], 'TP %', row['TP %'])
+            #    live_cache.setValue(row['stock'], 'SL %', row['SL %'])
+            #    live_cache.setValue(row['stock'], 'algo', row['algo'])
+            #    live_cache.setValue(row['stock'], 'freq', row['freq'])
+            #    live_cache.setValue(row['stock'], 'mode', row['mode'])
+            #    #send message to subscribe
+    else: #both zero
         pinfo("Remove all the stock")
         live_cache.remove()
         
     try:
-        for stock in value:
+        for stock in value: #Changes done in the selector
             live_cache.add(stock)
             pinfo("Added stock: {}".format(stock))
+            token = int(live_cache.hmget('eq_token',stock)[0])
+            live_cache.publish('live_trade_handlerlive', json.dumps({'cmd':'add','value':[token], 'mode':'ltp'}))
+            #TODO: Send message to subscribe for the stock
     except:
         pass
 
@@ -247,18 +275,44 @@ def add_row(value, ts, rows, columns):
         return [],[{}]
 
 
+@dash_app.callback(
+    Output("live-start", "active"),
+    [Input('live-start', 'n_clicks')] )
+def start_trade(n_clicks):
+    pinfo('Start Trade')
+    live_cache = cache_state(cache_id)
+    if n_clicks % 2 == 1:
+        live_cache = cache_state(cache_id)
+        live_cache.publish('live_trade_handlerlive', 'INIT')
+        return True
+    else:
+        return False
+
+
+@dash_app.callback(
+    Output("live-stop", "active"),
+    [Input('live-stop', 'n_clicks')] )
+def start_trade(n_clicks):
+    live_cache = cache_state(cache_id)
+    if n_clicks % 2 == 1:
+        pinfo('Stop Trade')
+        live_cache = cache_state(cache_id)
+        live_cache.publish('live_trade_handlerlive', 'CLOSE')
+        return True
+    else:
+        return False
 
 ########################### Kite Login ###########################
 import os
 import json
-import logging
+#import logging
 from datetime import date, datetime
 from decimal import Decimal
 
 from flask import Flask, request, jsonify, session
 from kiteconnect import KiteConnect
 
-logging.basicConfig(level=logging.DEBUG)
+#logging.basicConfig(level=logging.DEBUG)
 
 # Base settings
 #PORT = 5010
