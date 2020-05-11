@@ -383,7 +383,7 @@ def quick_backtest(data, ohlc_data, cache, exchange):
         trade_df1 = BUY(pre_data['close'], buy, trade_df1)
 
         #pinfo(trade_df1.sort_index().tail(10))
-        cache.setCache(stock_key+cache_type+'Trade',trade_df1)
+        cache.setCache(stock_key+cache_type+'Trade',trade_df1.sort_index())
     
     cache.set('done'+cache_postfix,1)
 
@@ -476,6 +476,8 @@ def ohlc_tick_handler(manager, msg):
                 cache.set('done'+cache_postfix,1)
                 counter = 0
                 ohlc_handler_sem.release()
+
+                cache.set('last_id_msg', msg[0])
                 break
             
             
