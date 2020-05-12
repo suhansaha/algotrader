@@ -2,6 +2,9 @@ from app import app
 #!/usr/bin/python
 from lib.multitasking_lib import *
 
+logger.setLevel(logging.DEBUG)
+#logger.setLevel(1)
+loggerT.setLevel(21)
 pinfo("================================")
 pinfo("***   Starting New Session   ***")
 pinfo("================================")

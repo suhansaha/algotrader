@@ -219,7 +219,7 @@ def add_row(value, ts, rows, columns):
             #TODO: Send message to unsubscribe
 
             token = int(live_cache.hmget('eq_token',stock)[0])
-            live_cache.publish('live_trade_handlerlive', json.dumps({'cmd':'remove','value':[token], 'mode':'ltp'}))
+            #live_cache.publish('live_trade_handlerlive', json.dumps({'cmd':'remove','value':[token], 'mode':'ltp'}))
 
         for index, row in  df_updates.iterrows():  #Stocks which are present in cache
             pinfo("Updated stock: {}".format(row['stock']))
@@ -258,6 +258,7 @@ def add_row(value, ts, rows, columns):
             live_cache.add(stock)
             pinfo("Added stock: {}".format(stock))
             token = int(live_cache.hmget('eq_token',stock)[0])
+            live_cache.sadd('ticker_list',token)
             live_cache.publish('live_trade_handlerlive', json.dumps({'cmd':'add','value':[token], 'mode':'ltp'}))
             #TODO: Send message to subscribe for the stock
     except:

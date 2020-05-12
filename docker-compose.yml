@@ -13,6 +13,19 @@ services:
       - redis
       - db
     restart: always
+  tickr:
+    image: suhansaha/talib_kite-alpine
+    command: python ticker.py
+    volumes:
+      - ./src:/code
+    expose:
+      - 5000
+    environment:
+      FLASK_ENV: development
+    depends_on:
+      - redis
+      - db
+    restart: always
   jupyter:
     image: suhansaha/talib_kite-alpine
     command: jupyter notebook --config=/code/jupyter_notebook_config.py --ip=0.0.0.0 --port=8888

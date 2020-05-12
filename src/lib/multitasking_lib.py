@@ -428,8 +428,8 @@ trade_job_sem = Semaphore(10)
 def ohlc_tick_handler(manager, msg):
     pdebug('ohlc_tick_handler: {}'.format(msg))
 
-    if msg != 'start':
-        return
+    #if msg != 'start':
+    #    return
 
     # Step 0: Clean queue
     cache.delete('msgBufferQueue'+cache_postfix)
@@ -452,16 +452,17 @@ def ohlc_tick_handler(manager, msg):
         if cache.xlen('msgBufferQueue'+cache_postfix) == 0:
             cache.xread({'msgBufferQueue'+cache_postfix:'$','notificationQueue'+cache_postfix:'$'}, block=0, count=5000)
 
-        last_id_msg = cache.get('last_id_msg')
+        #last_id_msg = cache.get('last_id_msg')
+        pinfo(cache.xlen('msgBufferQueue'+cache_postfix))
         msgs_q = cache.xread({'msgBufferQueue'+cache_postfix:last_id_msg,'notificationQueue'+cache_postfix:'0'}, block=2000, count=5000)
         #cache.xtrim('msgBufferQueue'+cache_postfix,maxlen=0, approximate=False)
         cache.xtrim('notificationQueue'+cache_postfix,maxlen=0, approximate=False)
         
-        #try:
+        try:
             #last_id_msg = cache.get('last_id_msg')
-            #last_id_msg = msgs_q[0][1][-1][0]
-        #except:
-        #    break
+            last_id_msg = msgs_q[0][1][-1][0]
+        except:
+            break
         #pinfo(last_id_msg)
         # Step 2: Process notifications: Start a worker thread for each notification
         #TODO
@@ -470,7 +471,7 @@ def ohlc_tick_handler(manager, msg):
         
         # Step 3: Process tick: Start a worker thread for each msg       
         for msg in msgs_q[0][1]:
-            pdebug1('ohlc_tick_handler: {}'.format(msg[1]))
+            pdebug('ohlc_tick_handler: {}'.format(msg[1]))
             counter = counter + 1
             val = json.loads(msg[1]['data'])
             if val == 'done':
@@ -479,7 +480,7 @@ def ohlc_tick_handler(manager, msg):
                 counter = 0
                 ohlc_handler_sem.release()
 
-                cache.set('last_id_msg', msg[0])
+                #cache.set('last_id_msg', msg[0])
                 break
             
             
@@ -530,11 +531,13 @@ def ohlc_tick_handler(manager, msg):
                 try:
                     cache.pushTICK(stock_id, temp_df)
 
-                    cache.set('last_id_msg', msg[0])
+                    #cache.set('last_id_msg', msg[0])
                 except:
                     pwarning('Can not push tick data: {}:{}'.format(stock_id, temp_df))
                 finally:
-                    cache.set('last_id_msg', msg[0])
+                    pass
+                
+                cache.set('last_id_msg', msg[0])
                 
                 # Start job to process Tick
                 mode = cache.getValue(stock_id,'mode')
@@ -566,7 +569,7 @@ def trade_job(manager, hash_key):
     tp = float(cache.getValue(hash_key,'tp'))
     sl = float(cache.getValue(hash_key,'sl'))
 
-    pdebug1("{}: {}: {}".format(hash_key, stock, state ))
+    pdebug("{}: {}: {}".format(hash_key, stock, state ))
     ohlc_df = cache.getOHLC(hash_key)
 
     ltp = float(ohlc_df.iloc[-1:]['close'][0])
@@ -702,25 +705,25 @@ def placeorder(prefix, df, stock, last_processed):
         sl = ltp[0] * ( 1 - sl_pt / 100 )
         tp =  ltp[0] * ( 1 + tp_pt / 100 )
         price = ltp[0] 
-        cache.publish('live_trade_handlerlive',json.dumps({'cmd':'buy','symbol':stock,'price':price,'qty':qty}))
+        cache.publish('order_handlerlive',json.dumps({'cmd':'buy','symbol':stock,'price':ltp[0],'qty':qty}))
     elif prefix == "B: EX: " or prefix == "B: SL: " or prefix == "B: TP: ":
         tmp_df['buy'] = ltp
         profit = (price - ltp[0]) * qty
         pl_pt = profit/price * 100
+        cache.publish('order_handlerlive',json.dumps({'cmd':'buy','symbol':stock,'price':ltp[0],'qty':qty}))
         price = 0
-        cache.publish('live_trade_handlerlive',json.dumps({'cmd':'buy','symbol':stock,'price':price,'qty':qty}))
     elif prefix == "S: EN: ":
         tmp_df['sell'] = ltp
         sl = ltp[0] * ( 1 + sl_pt / 100 )
         tp =  ltp[0] * ( 1 - tp_pt / 100 )
         price = ltp[0] 
-        cache.publish('live_trade_handlerlive',json.dumps({'cmd':'sell','symbol':stock,'price':price,'qty':qty}))
+        cache.publish('order_handlerlive',json.dumps({'cmd':'sell','symbol':stock,'price':ltp[0],'qty':qty}))
     elif prefix == "S: EX: " or prefix == "S: SL: " or prefix == "S: TP: ":
         tmp_df['sell'] = ltp
         profit = (ltp[0] - price) * qty
         pl_pt = profit/price * 100
+        cache.publish('order_handlerlive',json.dumps({'cmd':'sell','symbol':stock,'price':ltp[0],'qty':qty}))
         price = 0
-        cache.publish('live_trade_handlerlive',json.dumps({'cmd':'sell','symbol':stock,'price':price,'qty':qty}))
 
     totalprofit = totalprofit + profit
 
@@ -762,7 +765,8 @@ def live_trade_handler(manager, msg):
             kws.on_connect = on_connect
             kws.on_order_update = on_order_update
             cache.publish('ohlc_tick_handler'+cache_id,'start')
-            kws.connect(threaded=True)
+            cache.publish('live_trade_handler'+cache_id,'START')
+            #kws.connect(threaded=True)
         except Exception as e:
             perror('Could not connect to KITE server: {}'.format(e))
     elif msg == 'START':
@@ -776,50 +780,57 @@ def live_trade_handler(manager, msg):
     else:
         try:
             msg_j = json.loads(msg)
-            cmd = msg_j['cmd']        
+            cmd = msg_j['cmd']
+            value = msg_j['value']
+            mode_map = {'ltp':kws.MODE_LTP, 'full':kws.MODE_FULL, 'quote': kws.MODE_QUOTE}
+            mode = mode_map[msg_j['mode']]
             if cmd == 'add':
-                value = msg_j['value']
-                mode_map = {'ltp':kws.MODE_LTP, 'full':kws.MODE_FULL, 'quote': kws.MODE_QUOTE}
-                mode = mode_map[msg_j['mode']]
-
                 pinfo('Subscribe: {}: {}: {}'.format(cmd, mode, msg))
                 kws.subscribe(value)
                 kws.set_mode(mode, value)
             elif cmd == 'remove':
-                value = msg_j['value']
                 pinfo('Un-Subscribe: {}: {}'.format(cmd, msg))
                 kws.unsubscribe(value)
             elif cmd == 'mode':
-                value = msg_j['value']
-                mode_map = {'ltp':kws.MODE_LTP, 'full':kws.MODE_FULL, 'quote': kws.MODE_QUOTE}
                 pinfo('Set Mode: {}: {}'.format(cmd, msg))
-                kws.set_mode(mode, value)            
-            elif cmd == 'buy':
-                symbol = msg_j['symbol']
-                price = float(msg_j['price'])
-                quantity = int(msg_j['qty'])
-                pinfo('Placeorder-{}: {}: {}: {}'.format(cmd, symbol, price, quantity))
-                buy_limit(symbol, price, quantity)
-            elif cmd == 'sell':
-                symbol = msg_j['symbol']
-                price = float(msg_j['price'])
-                quantity = int(msg_j['qty'])
-                pinfo('Placeorder-{}: {}: {}: {}'.format(cmd, symbol, price, quantity))
-                sell_limit(symbol, price, quantity)
+                kws.set_mode(mode, value)
         except:
             pass
 
-
+kws = None
+kite = None
+kite_api_key = 'b2w0sfnr1zr92nxm'
 def order_handler(manager, msg):
+    global kws, kite, kite_api_key
     pdebug('order_handler: {}'.format(msg))
-    
-    # Step 1: Block for new order request: OrderQueue
-    
-    # Step 2: Create order msg for Kite: fill metadata
-    
-    # Step 3: If papertrade: create a log entry
-    
-    # Step 4: If not a papertrade: despatch order
+    cache.set('KiteAPIKey',kite_api_key)
+    KiteAPIKey = cache.get('KiteAPIKey')
+    kite = KiteConnect(api_key=KiteAPIKey)
+    access_token = cache.get('access_token')
+    kite.set_access_token(access_token)
+   
+    try:
+        msg_j = json.loads(msg)
+        cmd = msg_j['cmd']
+        if cmd == 'buy':
+            symbol = msg_j['symbol']
+            price = float(msg_j['price'])
+            quantity = int(msg_j['qty'])
+            pinfo('Placeorder-{}: {}: {}: {}'.format(cmd, symbol, price, quantity))
+            buy_limit(symbol, price, quantity)
+        elif cmd == 'sell':
+            symbol = msg_j['symbol']
+            price = float(msg_j['price'])
+            quantity = int(msg_j['qty'])
+            pinfo('Placeorder-{}: {}: {}: {}'.format(cmd, symbol, price, quantity))
+            sell_limit(symbol, price, quantity)
+        elif cmd == 'cancel':
+            cancel_order(symbol)
+        elif cmd == 'cancelAll':
+            cancel_all()
+    except:
+        pass
+
 
    
 
@@ -831,7 +842,8 @@ def freedom_init(manager, msg):
     cache.set('done'+cache_type,1)
     backtest_manager = threadManager(cache_type, ["kite_simulator","ohlc_tick_handler"], [kite_simulator, ohlc_tick_handler])
 
-    live_manager = threadManager(cache_id, ["ohlc_tick_handler","live_trade_handler","order_handler"], [ohlc_tick_handler, live_trade_handler, order_handler])
+    #live_manager = threadManager(cache_id, ["ohlc_tick_handler","live_trade_handler","order_handler"], [ohlc_tick_handler, live_trade_handler, order_handler])
+    live_manager = threadManager(cache_id, ["ohlc_tick_handler","order_handler"], [ohlc_tick_handler, order_handler])
     
 #TODO: Watchdog implementation to resume processes
 
@@ -895,8 +907,8 @@ def sell_limit(symbol, price, quantity=1):
                             #trigger_price=round(trigger,1),
                             #trigger_price=round(price,1),
                             price=price,
-                            variety=kite.VARIETY_REGULAR),
-                            tag='freedom_v2'
+                            variety=kite.VARIETY_REGULAR,
+                            tag='freedom_v2')
         pinfo("Order placed. ID is: {}".format(order_id))
     except:
         pinfo("Order placement failed: {}".format(sys.exc_info()[0]))
@@ -930,7 +942,7 @@ def sell_bo(symbol, price, trigger, stoploss, squareoff, quantity=1, tag="bot"):
         logger.info("Order placement failed: {}".format(e.message))
 
 
-def cancel_all_order():
+def cancel_all():
     orders_df = pd.DataFrame(kite.orders())
     
     #TODO: change status to OPEN
@@ -941,9 +953,9 @@ def cancel_all_order():
             transaction_type = 'SELL' if r['transaction_type'] == 'BUY' else 'BUY'
             #print(transaction_type)
             #print(qty)
-            #print(r)
-            cancelOrder(order_id)
+            print(r)
             #TODO: Call function for exit order
+            cancelOrder(order_id)
     
 def cancel_order(stocks=None):
     orders_df = pd.DataFrame(kite.orders())
@@ -955,11 +967,12 @@ def cancel_order(stocks=None):
             order_id = r['order_id']
             qty = r['quantity']
             transaction_type = 'SELL' if r['transaction_type'] == 'BUY' else 'BUY'
-            cancelOrder(order_id)
-            #print(r)
+            
+            print(r)
             #print(qty)
             #print(order_id)
             #TODO: Call function for exit order
+            cancelOrder(order_id)
 
 def getOrders():    
   # Fetch all orders
