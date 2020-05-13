@@ -48,7 +48,7 @@ def myalgo_old(cache, key, ohlc_data_df, algo='', state='SCANNING'):
 
     #pinfo(ohlc_data_temp)
     
-    if ohlc_data_temp.shape[0] < 30:
+    if ohlc_data_temp.shape[0] < 5:
         return 'WAIT'
 
     OPEN = ohlc_data_temp['open']
@@ -98,7 +98,7 @@ def myalgo(cache, key, ohlc_data_df, algo='', state='SCANNING', quick=False):
 
     #pinfo(ohlc_data_temp)
     
-    if ohlc_data_temp.shape[0] < 30:
+    if ohlc_data_temp.shape[0] < 5: #TODO
         return 'WAIT'
 
     OPEN = ohlc_data_temp['open']

@@ -85,11 +85,14 @@ class cache_state(Redis):
         hash_key1 = key+self.hash_postfix+'TICK'
         df = pd.read_json(self.get(hash_key))
         df1 =  pd.read_json(self.get(hash_key1))
+        
         #pinfo(df1['ltp'].head())
         #return resample(df['ltp'], freq)
-        resample_df = resample(df1['ltp'], freq)
-        #pinfo(resample_df.head())
-        return resample_df
+        if not df1.empty:
+            resample_df = resample(df1['ltp'], freq)
+            return resample_df
+        
+        return df1
     
     def setOHLC(self, key, df):
         # Overwrites existing content

@@ -63,11 +63,15 @@ RUN pip uninstall -y enum34
 RUN pip install flask-login sqlalchemy flask-sqlalchemy alembic flask-migrate flask-mail dash-bootstrap-components  
 RUN pip install dash-editor-components
 RUN apk --no-cache del build-base
+RUN apk add tzdata
+
+RUN cp /usr/share/zoneinfo/Asia/Calcutta /etc/localtime
+RUN echo "Asia/Calcutta" > /etc/timezone
 
 WORKDIR /code
 # Expose port 5000 for gunicorn and 8888 for Jupyter
 EXPOSE 5000
 EXPOSE 8888
 
-# Delte build artifacts and tempfile
+# Delete build artifacts and tempfile
 RUN rm -R v0.3.6.tar.gz OpenBLAS-0.3.6 ta-lib-0.4.0-src.tar.gz ta-lib ta-lib-py  

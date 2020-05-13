@@ -218,8 +218,9 @@ def add_row(value, ts, rows, columns):
             pinfo("Removed stock: {}".format(stock))
             #TODO: Send message to unsubscribe
 
-            token = int(live_cache.hmget('eq_token',stock)[0])
-            #live_cache.publish('live_trade_handlerlive', json.dumps({'cmd':'remove','value':[token], 'mode':'ltp'}))
+            #token = int(live_cache.hmget('eq_token',stock)[0])
+            #live_cache.srem('ticker_list',token)
+            #live_cache.publish('kite_ticker_handlerlive', json.dumps({'cmd':'remove','value':[token], 'mode':'ltp'}))
 
         for index, row in  df_updates.iterrows():  #Stocks which are present in cache
             pinfo("Updated stock: {}".format(row['stock']))
@@ -238,29 +239,32 @@ def add_row(value, ts, rows, columns):
                 order_id = live_cache.getValue(row['stock'], 'order_id')
                 #TODO: User initiated Buy/Sell, Cancel
             live_cache.setValue(row['stock'], 'state', row['state'])
-
-            #else:
-            #    live_cache.add(stock)                
-            #    pinfo("Added stock: {}".format(row['stock']))
-            #    live_cache.setValue(row['stock'], 'qty', row['qty'])
-            #    live_cache.setValue(row['stock'], 'TP %', row['TP %'])
-            #    live_cache.setValue(row['stock'], 'SL %', row['SL %'])
-            #    live_cache.setValue(row['stock'], 'algo', row['algo'])
-            #    live_cache.setValue(row['stock'], 'freq', row['freq'])
-            #    live_cache.setValue(row['stock'], 'mode', row['mode'])
-            #    #send message to subscribe
     else: #both zero
         pinfo("Remove all the stock")
+        
+        #token = int(live_cache.hmget('eq_token',df_updates['stock'])[0])
+        #live_cache.srem('ticker_list',token)
+        #live_cache.publish('kite_ticker_handlerlive', json.dumps({'cmd':'remove','value':[token], 'mode':'ltp'}))
         live_cache.remove()
         
     try:
         for stock in value: #Changes done in the selector
             live_cache.add(stock)
+            #live_cache.setValue(stock,'qty','1')
+            #live_cache.setValue(stock,'SL %','0.4')
+            #live_cache.setValue(stock,'TP %','1')
+            #live_cache.setValue(stock,'algo','haikin_1_new')
+            #live_cache.setValue(stock,'freq','1T')
+            #live_cache.setValue(stock,'mode','paper')
+
             pinfo("Added stock: {}".format(stock))
+
+            #Send message to subscribe for the stock
+            
             token = int(live_cache.hmget('eq_token',stock)[0])
             live_cache.sadd('ticker_list',token)
-            live_cache.publish('live_trade_handlerlive', json.dumps({'cmd':'add','value':[token], 'mode':'ltp'}))
-            #TODO: Send message to subscribe for the stock
+            live_cache.publish('kite_ticker_handlerlive', json.dumps({'cmd':'add','value':[token], 'mode':'ltp'}))
+            
     except:
         pass
 
@@ -271,14 +275,14 @@ def add_row(value, ts, rows, columns):
     #TODO: Send message to live_trade_handler
 
     if df.shape[0] > 0:
-        df = df[['stock', 'qty', 'TP %', 'SL %', 'algo', 'freq', 
-       'amount', 'price','P&L','P&L %', 'Total P&L', 'Total P&L %','low', 'sl', 'ltp', 'ltp %','tp', 'high', 'mode', 'state','last_processed']]
+        df = df[['stock', 'qty', 'TP %', 'SL %', 'algo', 'freq', 'mode', 'state',
+       'amount', 'price','P&L','P&L %', 'Total P&L', 'Total P&L %','low', 'sl', 'ltp', 'ltp %','tp', 'high', 'last_processed']]
             
         return df.to_dict('records'), [{"name": i, "id": i} for i in df.columns]
     else:
         return [],[{}]
 
-
+import time
 @dash_app.callback(
     [Output("live-start", "disabled"), Output("live-stop", "disabled")],
     [Input('live-start', 'n_clicks'), Input('live-stop', 'n_clicks')],
@@ -287,11 +291,11 @@ def toggle_trade(n1, n2, d1, d2):
     live_cache = cache_state(cache_id)
     if n1 > 0 and d1 == True: #Trade is onoging
         pinfo('Stop Trade')
-        live_cache.publish('live_trade_handlerlive', 'CLOSE')
+        live_cache.publish('kite_ticker_handlerlive', 'CLOSE')
         return False, True
     elif  d2 == True: # Trade is stopped
         pinfo('Start Trade')
-        live_cache.publish('live_trade_handlerlive', 'INIT')
+        live_cache.publish('kite_ticker_handlerlive', 'START')
         return True, False
 
 

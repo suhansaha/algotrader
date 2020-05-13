@@ -7,19 +7,21 @@ from queue import Queue
 from redis import Redis
 import multiprocessing
 import numpy as np
-from lib.logging_lib import *
-from lib.kite_helper_lib import *
-from lib.algo_lib import *
-from lib.data_model_lib import *
 import sys
 import json
 import ast
 from datetime import datetime, timedelta
 import time
 import sys
+from kiteconnect import KiteConnect
+from kiteconnect import KiteTicker
+
+from lib.logging_lib import *
+from lib.kite_wrapper_lib import *
+from lib.algo_lib import *
+from lib.data_model_lib import *
 
 logger.setLevel(logging.DEBUG)
-#logger.setLevel(1)
 loggerT.setLevel(21)
 # The base thread class to enable multithreading
 class myThread (threading.Thread):
@@ -60,11 +62,12 @@ class myThread (threading.Thread):
                 #break
             elif msg == 'pause':
                 self.manager.pause = True
+                pinfo('Paused : {}: {}'.format(self.name, self.manager.pause))
             elif msg == 'resume':
                 self.manager.pause = False
+                pinfo('Resume : {}: {}'.format(self.name, self.manager.pause))
             else:
                 self.manager.abort = False
-                self.manager.pause = False
                 self.workerThread = myThread(self.manager, self.name+'_worker', self.callback, False, msg)
                 self.workerThread.start()
                 #self.worker = multiprocessing.Process(target=self.callback, args=(self.manager, msg,)) 
@@ -78,6 +81,10 @@ class myThread (threading.Thread):
 jobs = []
 cache_postfix = ""
 cache = ""
+kws = None
+kite_api_key = 'b2w0sfnr1zr92nxm'
+kite = KiteConnect(api_key=kite_api_key)
+
 class threadManager():
     def __init__(self, name, thread_list, callback_list):
         self.threads = []
@@ -99,8 +106,6 @@ class threadManager():
         for tName in self.threadList:
             self.add(tName, self.threadCallback[self.threadID-1])
 
-        #self.add('watchdog', thread_watchdog)
-
         # Wait for all threads to complete
         for t in self.threads:
             t.join()
@@ -115,12 +120,6 @@ class threadManager():
         thread.start()
         self.threads.append(thread)
         self.threadID += 1
-
-def thread_watchdog():
-    pinfo('in thread watchdog')
-    pinfo(self)
-
-
 
 ######################################################
 ###                Freedom App                     ###
@@ -209,24 +208,9 @@ def trade_analysis_raw(trade_log):
     return (total_profit, max_loss, max_profit, total_win, total_loss, max_winning_streak, max_loosing_streak, trade_log)
 
 
-def msg_to_ohlc(data):
-    ohlc_list = list(data.values())[0]['ohlc']
-    sdate = ohlc_list['date']
-    shigh = ohlc_list['high']
-    slow = ohlc_list['low']
-    sopen = ohlc_list['open']
-    sclose = ohlc_list['close']
-    #svolume = ohlc_list['volume']
-
-    temp_df = pd.DataFrame(ohlc_list, columns=['open','high','low','close'], 
-                           index=[datetime.strptime(ohlc_list['date'],'%Y-%m-%d %H:%M:%S')])
-    
-    return temp_df
-
-
 # This function is called by Kite or Kite_Simulation
 def notification_despatcher(ws, msg, id='*', Tick=True ):
-    pdebug1('notification_despatcher:{}=>{}'.format(id,msg))
+    #pdebug('notification_despatcher:{}=>{}'.format(id,msg))
     # Step 1: Extract msg type: Tick/Callbacks
     
     # Step 2.1: If Tick
@@ -234,13 +218,17 @@ def notification_despatcher(ws, msg, id='*', Tick=True ):
         # Push msg to msgBufferQueue
         #msg_id = cache.xadd('msgBufferQueue'+cache_postfix, msg, id=id)
         msg_id = cache.xadd('msgBufferQueue'+cache_postfix, {'data':json.dumps(msg)}, id=id)
+        #pinfo(msg_id)
     
     # Step 2.2: else
     else:
         # Push msg to notificationQueue
-        cache.xadd('notificationQueue'+cache_postfix, msg, id = id)
+        cache.xadd('notificationQueue'+cache_postfix+'new', {'data':json.dumps(msg)}, id = id)
 
-###################### BackTest ######################
+
+#####################################################################################################################
+#### BackTest: KiteSimulator, Full Back Test, Quick Back Test                                                     ###
+#####################################################################################################################
 trade_lock_store = {} 
 simulator_lock = Lock()
 def trade_init(stock_key, data):        
@@ -286,7 +274,7 @@ def full_simulation(data, ohlc_data, cache, exchange, manager):
     stock = data['stock'][-1]
     no = ohlc_data[stock].shape[0]
     counter = 0
-    stream_id = lambda x,y:str(int(x.timestamp()+y)*1000)+'-0'
+    stream_id = lambda x,y:str(int(x.tz_localize(tz='Asia/Calcutta').timestamp()+y)*1000)+'-0'
     cache.delete('msgBufferQueue'+cache_postfix)
     cache.delete('notificationQueue'+cache_postfix)
     #pinfo(data['stock'])
@@ -422,10 +410,10 @@ def kite_simulator(manager, msg):
         full_simulation(data, ohlc_data, cache, exchange, manager)
     
 
-
-
 trade_job_sem = Semaphore(10)
+ohlc_tick_handler_lock = Lock()
 def ohlc_tick_handler(manager, msg):
+    #ohlc_tick_handler_lock.acquire()
     pdebug('ohlc_tick_handler: {}'.format(msg))
 
     #if msg != 'start':
@@ -506,7 +494,6 @@ def ohlc_tick_handler(manager, msg):
                 state = cache.getValue(hash_key,'state')
 
                 #pdebug('TH: {} =>{}'.format(hash_key, state))
-                #temp_df = msg_to_ohlc(data)
                 if state == 'INIT': # State: Init: Load historical data from cache
                     # 1: Populate Redis buffer stock+"OHLCBuffer" with historical data
                     deltaT = getDeltaT(hdf_freq)
@@ -534,9 +521,7 @@ def ohlc_tick_handler(manager, msg):
                     #cache.set('last_id_msg', msg[0])
                 except:
                     pwarning('Can not push tick data: {}:{}'.format(stock_id, temp_df))
-                finally:
-                    pass
-                
+
                 cache.set('last_id_msg', msg[0])
                 
                 # Start job to process Tick
@@ -547,6 +532,8 @@ def ohlc_tick_handler(manager, msg):
                     manager.add(stock_id, trade_job, False, hash_key)
                 
             ohlc_handler_sem.release()
+    
+    #ohlc_tick_handler_lock.release()
 
 def trade_job(manager, hash_key):
     if manager.abort == True or manager.pause == True:
@@ -554,132 +541,148 @@ def trade_job(manager, hash_key):
 
     pdebug1('trade_job: {}'.format(hash_key))
     
+    if cache.getValue('WIPRO').empty:
+        perror('Exiting tradejob as there is no cache')
+        return
+
     stock = cache.getValue(hash_key,'stock')
 
-    trade_lock = trade_lock_store[stock]
-    trade_lock.acquire()
-
-    # Step 1: Get state for the stock from the redis
-    state = cache.getValue(hash_key,'state')
-    if not state:
-        return
-    freq = cache.getValue(hash_key,'freq')
-    algo_name = cache.getValue(hash_key,'algo')
-    algo = cache.hget('algos',algo_name)
-    tp = float(cache.getValue(hash_key,'tp'))
-    sl = float(cache.getValue(hash_key,'sl'))
-
-    pdebug("{}: {}: {}".format(hash_key, stock, state ))
-    ohlc_df = cache.getOHLC(hash_key)
-
-    ltp = float(ohlc_df.iloc[-1:]['close'][0])
-    low = float(ohlc_df['low'].tail(30).min())
-    high =  float(ohlc_df['high'].tail(30).max())
-
-    cache.setValue(hash_key, 'ltp', ltp)
-    cache.setValue(hash_key, 'low', low)
-    cache.setValue(hash_key, 'high', high)
-
-    last_processed = ohlc_df.index[-1].strftime('%Y-%m-%d %H:%M')
-
-    time_val = ohlc_df.index[-1].minute+ohlc_df.index[-1].hour*60
-    cutoff_time = (15*60+15)
-    pdebug1("{}=>{}".format(last_processed,cache.getValue(hash_key,'last_processed')))
-    
-    if last_processed == cache.getValue(hash_key,'last_processed'):   
-        trade_lock.release()
+    try:
+        trade_lock = trade_lock_store[stock]
+        trade_lock.acquire()
+    except:
+        perror('Exiting trade job as could not get lock')
         trade_job_sem.release()
         return
-    else:
-        cache.setValue(hash_key,'last_processed',last_processed)
-    
-    # Step 2: Switch to appropriate state machine based on current state
-    if state == 'INIT': # State: Init
-        # 2: Set state to Scanning
-        cache.setValue(hash_key,'state','SCANNING')
-    
-    elif state == 'SCANNING':  # State: Scanning
-        # 1: Run trading algorithm for entering trade
-        tradeDecision = myalgo(cache, hash_key, ohlc_df, algo, state)
-        if time_val >= (cutoff_time-15):
-            pass
-        # 2: If Algo returns Buy: set State to 'Pending Order: Long'
-        elif tradeDecision=="BUY":
-            placeorder("B: EN: ", ohlc_df, stock, last_processed)
-            #logtrade("BUY : {} : {} -> {}".format(last_processed, stock, ohlc_get(ohlc_df,'close')))
-            cache.setValue(hash_key,'state','LONG') #TODO
-        
-        # 3: If Algo returns Sell: set State to 'Pending Order: Short'
-        elif tradeDecision=="SELL":
-            placeorder("S: EN: ", ohlc_df, stock, last_processed)
-            #logtrade("SELL: {} : {} -> {}".format(last_processed, stock, ohlc_get(ohlc_df,'close')))
-            cache.setValue(hash_key,'state','SHORT') #TODO
-        
-        # 4: Update TradeMetaData: Push order details to OrderQueue
-    
-    elif state == 'PO:LONG': # State: Pending Order: Long
-    
-        # 1: On Fill: set State to Long
-        cache.setValue(hash_key,'state','LONG')
-    
-    
-    elif state == 'PO:SHORT': # State: Pending Order: Short
-    
-        # 1: On Fill: set State to Short
-        cache.setValue(hash_key,'state','SHORT')
-    
-    
-    elif state == 'LONG': # State: Long
-        # 1: If notification for AutoSquare Off: set state to init
-        if time_val >= cutoff_time:
-            placeorder("S: EX: ", ohlc_df, stock, last_processed)
-            cache.setValue(hash_key,'state','SQUAREOFF')
-        elif ltp < sl:
-            placeorder("S: SL: ", ohlc_df, stock, last_processed)
-            cache.setValue(hash_key,'state','SQUAREOFF')
-        elif ltp > tp:
-            placeorder("S: TP: ", ohlc_df, stock, last_processed)
-            cache.setValue(hash_key,'state','SQUAREOFF')
-            pass
-        else:
-            # 2: Else run trading algorithm for square off
-            tradeDecision = myalgo(cache, hash_key, ohlc_df, algo, state)
-            if tradeDecision == "SELL":
-                placeorder("S: EX: ", ohlc_df, stock, last_processed)
-                #logtrade("SO-S: {} : {} -> {}".format(last_processed, stock, ohlc_get(ohlc_df,'close')))
 
-                # 3: If algo returns square off: then push square off details to OrderQueue, set state to 'Awaiting Square Off'   
-                cache.setValue(hash_key,'state','SQUAREOFF')
-    
-    
-    elif state == 'SHORT': # State: Short
-        # 1: If notification for AutoSquare Off: set state to init
-        if time_val >= cutoff_time:
-            placeorder("B: EX: ", ohlc_df, stock, last_processed)
-            cache.setValue(hash_key,'state','SQUAREOFF')
-        elif ltp > sl:
-            placeorder("B: SL: ", ohlc_df, stock, last_processed)
-            cache.setValue(hash_key,'state','SQUAREOFF')
-        elif ltp < tp:
-            placeorder("B: TP: ", ohlc_df, stock, last_processed)
-            cache.setValue(hash_key,'state','SQUAREOFF')
+    try:
+        # Step 1: Get state for the stock from the redis
+        state = cache.getValue(hash_key,'state')
+        if not state:
+            trade_lock.release()
+            trade_job_sem.release()
+            return
+        freq = cache.getValue(hash_key,'freq')
+        algo_name = cache.getValue(hash_key,'algo')
+        algo = cache.hget('algos',algo_name)
+        tp = float(cache.getValue(hash_key,'tp'))
+        sl = float(cache.getValue(hash_key,'sl'))
+
+        pdebug("{}: {}: {}".format(hash_key, stock, state ))
+        ohlc_df = cache.getOHLC(hash_key)
+
+        ltp = float(ohlc_df.iloc[-1:]['close'][0])
+        low = float(ohlc_df['low'].tail(30).min())
+        high =  float(ohlc_df['high'].tail(30).max())
+
+        cache.setValue(hash_key, 'ltp', ltp)
+        cache.setValue(hash_key, 'low', low)
+        cache.setValue(hash_key, 'high', high)
+
+        last_processed = ohlc_df.index[-1].strftime('%Y-%m-%d %H:%M')
+
+        time_val = ohlc_df.index[-1].minute+ohlc_df.index[-1].hour*60
+        cutoff_time = (15*60+15)
+        pdebug1("{}=>{}".format(last_processed,cache.getValue(hash_key,'last_processed')))
+        
+        if last_processed == cache.getValue(hash_key,'last_processed'):   
+            trade_lock.release()
+            trade_job_sem.release()
+            return
         else:
-            # 2: Else run trading algorithm for square off
+            cache.setValue(hash_key,'last_processed',last_processed)
+        
+        # Step 2: Switch to appropriate state machine based on current state
+        if state == 'INIT': # State: Init
+            # 2: Set state to Scanning
+            cache.setValue(hash_key,'state','SCANNING')
+        
+        elif state == 'SCANNING':  # State: Scanning
+            # 1: Run trading algorithm for entering trade
             tradeDecision = myalgo(cache, hash_key, ohlc_df, algo, state)
-            if tradeDecision == "BUY":
-                placeorder("B: EX: ", ohlc_df, stock, last_processed)
-                #logtrade("SO-B: {} : {} -> {}".format(last_processed, stock, ohlc_get(ohlc_df,'close')))
+            if time_val >= (cutoff_time-15):
+                pass
+            # 2: If Algo returns Buy: set State to 'Pending Order: Long'
+            elif tradeDecision=="BUY":
+                placeorder("B: EN: ", ohlc_df, stock, last_processed)
+                #logtrade("BUY : {} : {} -> {}".format(last_processed, stock, ohlc_get(ohlc_df,'close')))
+                cache.setValue(hash_key,'state','LONG') #TODO
             
-                # 3: If algo returns square off: then push square off details to OrderQueue, set state to 'Awaiting Square Off'
+            # 3: If Algo returns Sell: set State to 'Pending Order: Short'
+            elif tradeDecision=="SELL":
+                placeorder("S: EN: ", ohlc_df, stock, last_processed)
+                #logtrade("SELL: {} : {} -> {}".format(last_processed, stock, ohlc_get(ohlc_df,'close')))
+                cache.setValue(hash_key,'state','SHORT') #TODO
+            
+            # 4: Update TradeMetaData: Push order details to OrderQueue
         
+        elif state == 'PO:LONG': # State: Pending Order: Long
+        
+            # 1: On Fill: set State to Long
+            cache.setValue(hash_key,'state','LONG')
+        
+        
+        elif state == 'PO:SHORT': # State: Pending Order: Short
+        
+            # 1: On Fill: set State to Short
+            cache.setValue(hash_key,'state','SHORT')
+        
+        
+        elif state == 'LONG': # State: Long
+            # 1: If notification for AutoSquare Off: set state to init
+            if time_val >= cutoff_time:
+                placeorder("S: EX: ", ohlc_df, stock, last_processed)
                 cache.setValue(hash_key,'state','SQUAREOFF')
+            elif ltp < sl:
+                placeorder("S: SL: ", ohlc_df, stock, last_processed)
+                cache.setValue(hash_key,'state','SQUAREOFF')
+            elif ltp > tp:
+                placeorder("S: TP: ", ohlc_df, stock, last_processed)
+                cache.setValue(hash_key,'state','SQUAREOFF')
+                pass
+            else:
+                # 2: Else run trading algorithm for square off
+                tradeDecision = myalgo(cache, hash_key, ohlc_df, algo, state)
+                if tradeDecision == "SELL":
+                    placeorder("S: EX: ", ohlc_df, stock, last_processed)
+                    #logtrade("SO-S: {} : {} -> {}".format(last_processed, stock, ohlc_get(ohlc_df,'close')))
+
+                    # 3: If algo returns square off: then push square off details to OrderQueue, set state to 'Awaiting Square Off'   
+                    cache.setValue(hash_key,'state','SQUAREOFF')
         
-    elif state == 'SQUAREOFF':  # State: Awaiting Square Off
-        # 1: On Fill notification: set state to SCANNING
-        cache.setValue(hash_key,'state','SCANNING')
-   
-    trade_lock.release()
-    trade_job_sem.release()
+        
+        elif state == 'SHORT': # State: Short
+            # 1: If notification for AutoSquare Off: set state to init
+            if time_val >= cutoff_time:
+                placeorder("B: EX: ", ohlc_df, stock, last_processed)
+                cache.setValue(hash_key,'state','SQUAREOFF')
+            elif ltp > sl:
+                placeorder("B: SL: ", ohlc_df, stock, last_processed)
+                cache.setValue(hash_key,'state','SQUAREOFF')
+            elif ltp < tp:
+                placeorder("B: TP: ", ohlc_df, stock, last_processed)
+                cache.setValue(hash_key,'state','SQUAREOFF')
+            else:
+                # 2: Else run trading algorithm for square off
+                tradeDecision = myalgo(cache, hash_key, ohlc_df, algo, state)
+                if tradeDecision == "BUY":
+                    placeorder("B: EX: ", ohlc_df, stock, last_processed)
+                    #logtrade("SO-B: {} : {} -> {}".format(last_processed, stock, ohlc_get(ohlc_df,'close')))
+                
+                    # 3: If algo returns square off: then push square off details to OrderQueue, set state to 'Awaiting Square Off'
+            
+                    cache.setValue(hash_key,'state','SQUAREOFF')
+            
+        elif state == 'SQUAREOFF':  # State: Awaiting Square Off
+            # 1: On Fill notification: set state to SCANNING
+            cache.setValue(hash_key,'state','SCANNING')
+
+        
+        trade_lock.release()
+    except:
+        perror('Issue in algotrade')
+    finally:
+        trade_job_sem.release()
 
 
 def placeorder(prefix, df, stock, last_processed):
@@ -742,38 +745,86 @@ def placeorder(prefix, df, stock, last_processed):
     tmp_df['mode'] = prefix
     cache.pushTrade(stock, tmp_df)
 
-import json
-kws = None
-kite = None
-kite_api_key = 'b2w0sfnr1zr92nxm'
-def live_trade_handler(manager, msg):
+
+#####################################################################################################################
+#### Order Handler: Provides api to buy, sell and cancle order using Kite                                         ###
+#####################################################################################################################
+
+def order_handler(manager, msg):
     global kws, kite, kite_api_key
+    pdebug('order_handler: {}'.format(msg))
+    KiteAPIKey = cache.get('KiteAPIKey')
+    kite = KiteConnect(api_key=KiteAPIKey)
+    access_token = cache.get('access_token')
+    kite.set_access_token(access_token)
+
+    #pinfo(manager.pause)
+    if manager.pause == True:
+        pwarning('Order Handler Paused: Can not place order now: {}'.format(msg))
+        return
+   
+    try:
+        msg_j = json.loads(msg)
+        cmd = msg_j['cmd']
+        if cmd == 'buy':
+            symbol = msg_j['symbol']
+            price = float(msg_j['price'])
+            quantity = int(msg_j['qty'])
+            pinfo('Placeorder-{}: {}: {}: {}'.format(cmd, symbol, price, quantity))
+            order_id = buy_limit(kite, symbol, price, quantity)
+            cache.setValue(symbol,'order_id', order_id)
+        elif cmd == 'sell':
+            symbol = msg_j['symbol']
+            price = float(msg_j['price'])
+            quantity = int(msg_j['qty'])
+            pinfo('Placeorder-{}: {}: {}: {}'.format(cmd, symbol, price, quantity))
+            order_id = sell_limit(kite, symbol, price, quantity)
+            cache.setValue(symbol,'order_id', order_id)
+        elif cmd == 'cancel':
+            symbol = msg_j['symbol']
+            pinfo(symbol)
+            cancel_order(kite, [symbol])
+        elif cmd == 'cancelAll':
+            cancel_all(kite)
+        elif cmd == 'getOrder':
+            pinfo(getOrders(kite))
+    except:
+        pass
+
+
+#####################################################################################################################
+#### Kite Ticker Handler: Provides api to Subscribe, Unsubscribe for ticks                                        ###
+#####################################################################################################################
+
+def kite_ticker_handler(manager, msg):
+    global kws, kite, kite_api_key, access_token
     pdebug('live_trade_handler: {}'.format(msg))
     # 1: Start kite websocket connections
     # Initialise
     if msg == 'INIT':
         try:
             cache.set('KiteAPIKey',kite_api_key)
-            KiteAPIKey = cache.get('KiteAPIKey')
-            kite = KiteConnect(api_key=KiteAPIKey)
             access_token = cache.get('access_token')
             kite.set_access_token(access_token)
             pinfo(kite.access_token)
-            kws = KiteTicker(KiteAPIKey, kite.access_token)
+            kws = KiteTicker(kite_api_key, kite.access_token)
+
             # Assign the callbacks.
             kws.on_ticks = on_ticks
             kws.on_connect = on_connect
             kws.on_order_update = on_order_update
-            cache.publish('ohlc_tick_handler'+cache_id,'start')
-            cache.publish('live_trade_handler'+cache_id,'START')
-            #kws.connect(threaded=True)
+            cache.publish('kite_ticker_handler'+cache_postfix,'START')
         except Exception as e:
             perror('Could not connect to KITE server: {}'.format(e))
     elif msg == 'START':
         kws.connect(threaded=True)
+        #kws.subscribe(value)
+        #kws.set_mode(kws.MODE_LTP, value) #Default mode LTP
+
     elif msg == 'STATUS':
         pinfo(kws.is_connected())
     elif msg == 'CLOSE':
+        #cache.publish('ohlc_tick_handler'+cache_id,'stop')
         kws.close()
     elif msg == 'profile':
         pinfo(kite.profile())
@@ -784,240 +835,47 @@ def live_trade_handler(manager, msg):
             value = msg_j['value']
             mode_map = {'ltp':kws.MODE_LTP, 'full':kws.MODE_FULL, 'quote': kws.MODE_QUOTE}
             mode = mode_map[msg_j['mode']]
+            
             if cmd == 'add':
-                pinfo('Subscribe: {}: {}: {}'.format(cmd, mode, msg))
                 kws.subscribe(value)
                 kws.set_mode(mode, value)
+                pinfo('Subscribe: {}: {}'.format(cmd, msg))
             elif cmd == 'remove':
-                pinfo('Un-Subscribe: {}: {}'.format(cmd, msg))
                 kws.unsubscribe(value)
+                pinfo('Un-Subscribe: {}: {}'.format(cmd, msg))
             elif cmd == 'mode':
                 pinfo('Set Mode: {}: {}'.format(cmd, msg))
                 kws.set_mode(mode, value)
         except:
             pass
 
-kws = None
-kite = None
-kite_api_key = 'b2w0sfnr1zr92nxm'
-def order_handler(manager, msg):
-    global kws, kite, kite_api_key
-    pdebug('order_handler: {}'.format(msg))
-    cache.set('KiteAPIKey',kite_api_key)
-    KiteAPIKey = cache.get('KiteAPIKey')
-    kite = KiteConnect(api_key=KiteAPIKey)
-    access_token = cache.get('access_token')
-    kite.set_access_token(access_token)
-   
-    try:
-        msg_j = json.loads(msg)
-        cmd = msg_j['cmd']
-        if cmd == 'buy':
-            symbol = msg_j['symbol']
-            price = float(msg_j['price'])
-            quantity = int(msg_j['qty'])
-            pinfo('Placeorder-{}: {}: {}: {}'.format(cmd, symbol, price, quantity))
-            buy_limit(symbol, price, quantity)
-        elif cmd == 'sell':
-            symbol = msg_j['symbol']
-            price = float(msg_j['price'])
-            quantity = int(msg_j['qty'])
-            pinfo('Placeorder-{}: {}: {}: {}'.format(cmd, symbol, price, quantity))
-            sell_limit(symbol, price, quantity)
-        elif cmd == 'cancel':
-            cancel_order(symbol)
-        elif cmd == 'cancelAll':
-            cancel_all()
-    except:
-        pass
 
-
-   
-
-def freedom_init(manager, msg):
-    pdebug('freedom_init: {}'.format(msg))
-    job_alive = lambda x: pinfo("backtest_manager: {}".format(x.job.is_alive()))
-    # 0: Initialize settings
-
-    cache.set('done'+cache_type,1)
-    backtest_manager = threadManager(cache_type, ["kite_simulator","ohlc_tick_handler"], [kite_simulator, ohlc_tick_handler])
-
-    #live_manager = threadManager(cache_id, ["ohlc_tick_handler","live_trade_handler","order_handler"], [ohlc_tick_handler, live_trade_handler, order_handler])
-    live_manager = threadManager(cache_id, ["ohlc_tick_handler","order_handler"], [ohlc_tick_handler, order_handler])
-    
-#TODO: Watchdog implementation to resume processes
-
-
-
-###################################################
-### Kite Order functions                        ###
-###################################################
-
-def buy_limit(symbol, price, quantity=1): 
-    global kite
-    logtrade("B Limit: {}[{}]=> {}".format(symbol, quantity, price))
-
-    mode = cache.getValue(symbol,'mode')
-    if mode != 'live':
-        return
-
-    KiteAPIKey = cache.get('KiteAPIKey')
-    kite = KiteConnect(api_key=KiteAPIKey)
-    access_token = cache.get('access_token')
-    kite.set_access_token(access_token)
-
-    try:
-        order_id = kite.place_order(tradingsymbol=symbol,
-                                exchange=kite.EXCHANGE_NSE,
-                                transaction_type=kite.TRANSACTION_TYPE_BUY,
-                                quantity=quantity,
-                                order_type=kite.ORDER_TYPE_LIMIT,
-                                product=kite.PRODUCT_MIS,
-                                #trigger_price=round(trigger,1),
-                                #stoploss=round(stoploss,1),
-                                #trigger_price=round(price,1),
-                                price=price,
-                                variety=kite.VARIETY_REGULAR,
-                                tag='freedom_v2'
-                                )
-        pinfo("Order placed. ID is: {}".format(order_id))
-    except:
-        pinfo("Order placement failed: {}".format(sys.exc_info()[0]))
-        
-def sell_limit(symbol, price, quantity=1):
-    global kite
-    logtrade("S Limit: {}[{}]=> {}".format(symbol, quantity, price))
-    
-    mode = cache.getValue(symbol,'mode')
-    if mode != 'live':
-        return
-
-    KiteAPIKey = cache.get('KiteAPIKey')
-    kite = KiteConnect(api_key=KiteAPIKey)
-    access_token = cache.get('access_token')
-    kite.set_access_token(access_token)
-
-    try:
-        order_id = kite.place_order(tradingsymbol=symbol,
-                            exchange=kite.EXCHANGE_NSE,
-                            transaction_type=kite.TRANSACTION_TYPE_SELL,
-                            quantity=quantity,
-                            order_type=kite.ORDER_TYPE_LIMIT,
-                            product=kite.PRODUCT_MIS,
-                            #trigger_price=round(trigger,1),
-                            #trigger_price=round(price,1),
-                            price=price,
-                            variety=kite.VARIETY_REGULAR,
-                            tag='freedom_v2')
-        pinfo("Order placed. ID is: {}".format(order_id))
-    except:
-        pinfo("Order placement failed: {}".format(sys.exc_info()[0]))
-
-def buy_bo(symbol, price, trigger, stoploss, squareoff, quantity=1, tag="bot"): 
-  pinfo('%12s'%"BUY BO: "+symbol+", price: "+str('%0.2f'%price)+", squareoff: "+str('%0.2f'%squareoff)+", stoploss: "+str('%0.2f'%stoploss)+", quantity: "+str(quantity))
-  
-  try:
-    order_id = kite.place_order(tradingsymbol=symbol, exchange=kite.EXCHANGE_NSE, transaction_type=kite.TRANSACTION_TYPE_BUY,
-                    order_type=kite.ORDER_TYPE_LIMIT, product=kite.PRODUCT_MIS, variety=kite.VARIETY_BO, 
-                            quantity=quantity, trigger_price=trigger, price=price,
-                            squareoff=squareoff,  stoploss=stoploss, tag=tag )
-    logger.info("Order placed. ID is: {}".format(order_id))
-  except Exception as e:
-    logger.info("Order placement failed: {}".format(e.message))
-
-
-
-def sell_bo(symbol, price, trigger, stoploss, squareoff, quantity=1, tag="bot"): 
-    pinfo('%12s'%"SELL BO: "+symbol+", price: "+str('%0.2f'%price)+", squareoff: "+str('%0.2f'%squareoff)+", stoploss: "+str('%0.2f'%stoploss)+", quantity: "+str(quantity))
-    if papertrade:
-        return
-    
-    try:
-        order_id = kite.place_order(tradingsymbol=symbol, exchange=kite.EXCHANGE_NSE, transaction_type=kite.TRANSACTION_TYPE_SELL,
-                                order_type=kite.ORDER_TYPE_LIMIT, product=kite.PRODUCT_MIS, variety=kite.VARIETY_BO,
-                                quantity=quantity, trigger_price=trigger, price=price,
-                                stoploss=stoploss, squareoff=squareoff,  tag=tag )
-        logger.info("Order placed. ID is: {}".format(order_id))
-    except Exception as e:
-        logger.info("Order placement failed: {}".format(e.message))
-
-
-def cancel_all():
-    orders_df = pd.DataFrame(kite.orders())
-    
-    #TODO: change status to OPEN
-    orders_df = orders_df.loc[(orders_df['status']=='COMPLETE'), ['order_id','status','tradingsymbol','transaction_type','quantity']]
-    for i, r in orders_df.iterrows():
-            order_id = r['order_id']
-            qty = r['quantity']
-            transaction_type = 'SELL' if r['transaction_type'] == 'BUY' else 'BUY'
-            #print(transaction_type)
-            #print(qty)
-            print(r)
-            #TODO: Call function for exit order
-            cancelOrder(order_id)
-    
-def cancel_order(stocks=None):
-    orders_df = pd.DataFrame(kite.orders())
-    for stock in stocks:
-        #TODO: change status to OPEN
-        tmp_df = orders_df.loc[(orders_df['tradingsymbol']==stock) & (orders_df['status']=='COMPLETE'), ['order_id','status','tradingsymbol','transaction_type','quantity']]
-        #print(tmp_df)
-        for i, r in tmp_df.iterrows():
-            order_id = r['order_id']
-            qty = r['quantity']
-            transaction_type = 'SELL' if r['transaction_type'] == 'BUY' else 'BUY'
-            
-            print(r)
-            #print(qty)
-            #print(order_id)
-            #TODO: Call function for exit order
-            cancelOrder(order_id)
-
-def getOrders():    
-  # Fetch all orders
-  return pd.DataFrame(kite.orders())
-
-def cancelOrder(orderId):
-    KiteAPIKey = cache.get('KiteAPIKey')
-    kite = KiteConnect(api_key=KiteAPIKey)
-    access_token = cache.get('access_token')
-    kite.set_access_token(access_token)
-    try:
-        kite.cancel_order(variety=kite.VARIETY_REGULAR, order_id=orderId, parent_order_id=None)    
-    except Exception as e:
-        logger.info("Order Cancellation failed: {}".format(e.message))
-
-#TODO: Modify this function for SLM     
-def squareoff(symbol=None, tag="bot"):
-  pinfo('%12s'%"Squareoff: "+symbol)
-
-  orders_df = pd.DataFrame(kite.orders())
-  if symbol != None:
-    open_orders = orders_df[(orders_df['tradingsymbol']==symbol) & (orders_df['status'] == 'TRIGGER PENDING')  & (orders_df['tag'] == tag)]
-  else:
-    open_orders = orders_df[(orders_df['status'] == 'TRIGGER PENDING')  & (orders_df['tag'] == tag)]
-      
-  for index, row in open_orders.iterrows():
-    pinfo(row.order_id, row.parent_order_id)
-    kite.exit_order(variety=kite.VARIETY_BO, order_id=order_id, parent_order_id=parent_order_id)
-
- 
 ###################################################
 ### Kite CallBack functions                     ###
 ###################################################
-def initTrade(ws):
-  ws.cache = cache_state(cache_id)
 
 def on_ticks(ws, ticks):
   # Callback to receive ticks.
-  pdebug("Ticks: {}".format(ticks))
+  #pdebug("Ticks: {}".format(ticks))
   #for tick in ticks:
   notification_despatcher(ws, ticks)
 
 
 def on_connect(ws, response):
-  initTrade(ws)
+
+    pinfo('connected')
+    ws.cache = cache_state(cache_id)
+    ws.cache.publish('ohlc_tick_handler'+cache_id,'start')
+
+    value = list(map(int,ws.cache.smembers('ticker_list'))) #Initialize
+    if len(value) > 0:
+        ws.subscribe(value)
+        ws.set_mode(ws.MODE_LTP, value)
+
+    #ws.cache = cache_state(cache_id)
+    ws.cache.set('Kite_Status','connected')
+    pinfo('Exiting on connected')
+
   # Callback on successful connect.
   # Subscribe to a list of instrument_tokens (RELIANCE and ACC here).
   #ws.subscribe([225537])
@@ -1033,8 +891,16 @@ def on_connect(ws, response):
 def on_close(ws, code, reason):
   # On connection close stop the main loop
   # Reconnection will not happen after executing `ws.stop()`
+  ws.cache.set('Kite_Status','close')
+  #ws.cache.xtrim('msgBufferQueue'+cache_postfix, 0, False)
+  notification_despatcher(ws,'done')
   ws.stop()
+  pinfo('Exiting on close')
 
 def on_order_update(ws, data):
   #logger.info("New Order Update")
   notification_despatcher(ws,data, Tick=False)
+
+    
+#TODO: Watchdog implementation to resume processes
+

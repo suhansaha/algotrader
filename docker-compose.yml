@@ -7,21 +7,50 @@ services:
       - ./src:/code
     expose:
       - 5000
-    environment:
-      FLASK_ENV: development
     depends_on:
       - redis
       - db
     restart: always
-  tickr:
+  ticker:
     image: suhansaha/talib_kite-alpine
     command: python ticker.py
     volumes:
       - ./src:/code
     expose:
       - 5000
-    environment:
-      FLASK_ENV: development
+    depends_on:
+      - redis
+      - db
+    restart: always
+  backtest:
+    image: suhansaha/talib_kite-alpine
+    command: python backtest.py
+    volumes:
+      - ./src:/code
+    expose:
+      - 5000
+    depends_on:
+      - redis
+      - db
+    restart: always
+  live:
+    image: suhansaha/talib_kite-alpine
+    command: python live.py
+    volumes:
+      - ./src:/code
+    expose:
+      - 5000
+    depends_on:
+      - redis
+      - db
+    restart: always
+  order:
+    image: suhansaha/talib_kite-alpine
+    command: python order.py
+    volumes:
+      - ./src:/code
+    expose:
+      - 5000
     depends_on:
       - redis
       - db
