@@ -61,7 +61,10 @@ class cache_state(Redis):
         #pinfo(cache_buff.tail())
         #pinfo(df.head())
         cache_buff = cache_buff.append(df)
-        self.setCache(hash_key, cache_buff)
+        try:
+            self.setCache(hash_key, cache_buff)
+        except:
+            pass
     
     def setCache(self, hash_key, df):
         self.set(hash_key, df.to_json(orient='columns'))

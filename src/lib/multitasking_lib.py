@@ -101,6 +101,8 @@ class threadManager():
         global cache_postfix, cache
         cache_postfix = self.name
         cache = cache_state(cache_postfix)
+        self.pause = False
+        self.abort = False
         #cache.flushall()
         # Create new threads
         for tName in self.threadList:
@@ -414,14 +416,8 @@ trade_job_sem = Semaphore(10)
 ohlc_tick_handler_lock = Lock()
 def ohlc_tick_handler(manager, msg):
     #ohlc_tick_handler_lock.acquire()
-    pdebug('ohlc_tick_handler: {}'.format(msg))
+    pdebug('ohlc_tick_handler({}) - INIT: {}'.format(cache_postfix, msg))
 
-    #if msg != 'start':
-    #    return
-
-    # Step 0: Clean queue
-    cache.delete('msgBufferQueue'+cache_postfix)
-    cache.delete('notificationQueue'+cache_postfix)
     last_id_msg = '0'
     cache.set('last_id_msg', last_id_msg)
      
@@ -434,37 +430,33 @@ def ohlc_tick_handler(manager, msg):
             counter = 0
             ohlc_handler_sem.release()
             break
-            #cache.xtrim('notificationQueue'+cache_postfix,maxlen=0, approximate=False)
 
         # Step 1: Blocking call to msgBufferQueue and notificationQueue
         if cache.xlen('msgBufferQueue'+cache_postfix) == 0:
-            cache.xread({'msgBufferQueue'+cache_postfix:'$','notificationQueue'+cache_postfix:'$'}, block=0, count=5000)
+            cache.xread({'msgBufferQueue'+cache_postfix:'$'}, block=0, count=5000)
 
         #last_id_msg = cache.get('last_id_msg')
-        pinfo(cache.xlen('msgBufferQueue'+cache_postfix))
-        msgs_q = cache.xread({'msgBufferQueue'+cache_postfix:last_id_msg,'notificationQueue'+cache_postfix:'0'}, block=2000, count=5000)
+        #pinfo(cache.xlen('msgBufferQueue'+cache_postfix))
+        
+        msgs_q = cache.xread({'msgBufferQueue'+cache_postfix:last_id_msg}, block=2000, count=5000)
         #cache.xtrim('msgBufferQueue'+cache_postfix,maxlen=0, approximate=False)
-        cache.xtrim('notificationQueue'+cache_postfix,maxlen=0, approximate=False)
         
         try:
             #last_id_msg = cache.get('last_id_msg')
             last_id_msg = msgs_q[0][1][-1][0]
         except:
+            perror('Could not read data from msgBufferQueue')
             break
         #pinfo(last_id_msg)
-        # Step 2: Process notifications: Start a worker thread for each notification
-        #TODO
-
-
         
         # Step 3: Process tick: Start a worker thread for each msg       
         for msg in msgs_q[0][1]:
-            pdebug('ohlc_tick_handler: {}'.format(msg[1]))
+            pdebug1('ohlc_tick_handler({}): {}'.format(cache_postfix ,msg))
             counter = counter + 1
             val = json.loads(msg[1]['data'])
-            if val == 'done':
-                perror("Processing done: {}: {}".format(counter, msg))
-                cache.set('done'+cache_postfix,1)
+            if val == 'done': # Backtest completed, exit gracefully
+                perror("Processing done({}): {}: {}".format(cache_postfix, counter, msg))
+                cache.set('done'+cache_postfix,1) #Trigger to UI thread TODO: Optimize
                 counter = 0
                 ohlc_handler_sem.release()
 
@@ -474,24 +466,19 @@ def ohlc_tick_handler(manager, msg):
             
             date_val = datetime.fromtimestamp(int(msg[0].split('-')[0])/1000).strftime('%Y-%m-%d %H:%M:%S')
 
-            #stock = []
-            #ltp = []
-            #date = []
             for data in val:
                 #{'data': '{"tradable": true, "mode": "quote", "instrument_token": 969473, "last_price": 185.0, "last_quantity": 6, "average_price": 187.11, "volume": 4319803, "buy_quantity": 469701, "sell_quantity": 539438, "ohlc": {"open": 185.0, "high": 189.95, "low": 184.1, "close": 184.0}, "change": 0.5434782608695652}'}
                 instrument_token = int(data['instrument_token'])
                 stock_id = cache.hmget('eq_token',instrument_token)[0]
-                
-                
-                ltp = data['last_price']
+                hash_key = stock_id
+
+                ltp = data['last_price'] # Get LTP from the latest msg
                 temp_df = pd.DataFrame(data={'date':[date_val],'ltp':[ltp]})
                 temp_df = temp_df.set_index('date')
                 temp_df.index = pd.to_datetime(temp_df.index)
-                #pinfo(stock_id)
-                #pinfo(ltp)
-                hash_key = stock_id
-                hdf_freq = cache.getValue(hash_key,'hdf_freq')
-                state = cache.getValue(hash_key,'state')
+                
+                hdf_freq = cache.getValue(hash_key,'hdf_freq') # Needed to pull data
+                state = cache.getValue(hash_key,'state') # Initialize OHLC buffer
 
                 #pdebug('TH: {} =>{}'.format(hash_key, state))
                 if state == 'INIT': # State: Init: Load historical data from cache
@@ -517,19 +504,28 @@ def ohlc_tick_handler(manager, msg):
 
                 try:
                     cache.pushTICK(stock_id, temp_df)
-
-                    #cache.set('last_id_msg', msg[0])
                 except:
                     pwarning('Can not push tick data: {}:{}'.format(stock_id, temp_df))
 
                 cache.set('last_id_msg', msg[0])
+                ########## Should I start Trade Job? ###########################
                 
+                mode = cache.getValue(stock_id,'mode') #don't start if mode is paused
                 # Start job to process Tick
-                mode = cache.getValue(stock_id,'mode')
-                #pinfo(mode)
                 if manager.abort == False and manager.pause == False and mode != 'PAUSE':
-                    trade_job_sem.acquire()
-                    manager.add(stock_id, trade_job, False, hash_key)
+                    last_processed = temp_df.index[-1].strftime('%Y-%m-%d %H:%M')
+ 
+                    pdebug1("{}, {}=>{}".format(temp_df.index[-1], last_processed,cache.getValue(hash_key,'last_processed')))
+                    
+                    if last_processed != cache.getValue(hash_key,'last_processed'):  
+                        #pinfo(last_processed)
+                        cache.setValue(hash_key,'last_processed',last_processed)
+
+                        pdebug1('start trade job')
+                        trade_job_sem.acquire()
+                        manager.add(stock_id, trade_job, False, hash_key)
+                else:
+                    pwarning('Algotrade Paused for {}:[abort:{}, pause:{}, mode:{}]'.format(stock_id, manager.abort, manager.pause, mode))
                 
             ohlc_handler_sem.release()
     
@@ -554,7 +550,6 @@ def trade_job(manager, hash_key):
         perror('Exiting trade job as could not get lock')
         trade_job_sem.release()
         return
-
     try:
         # Step 1: Get state for the stock from the redis
         state = cache.getValue(hash_key,'state')
@@ -562,13 +557,14 @@ def trade_job(manager, hash_key):
             trade_lock.release()
             trade_job_sem.release()
             return
+
         freq = cache.getValue(hash_key,'freq')
         algo_name = cache.getValue(hash_key,'algo')
         algo = cache.hget('algos',algo_name)
         tp = float(cache.getValue(hash_key,'tp'))
         sl = float(cache.getValue(hash_key,'sl'))
 
-        pdebug("{}: {}: {}".format(hash_key, stock, state ))
+        pdebug1("{}: {}: {}".format(hash_key, stock, state ))
         ohlc_df = cache.getOHLC(hash_key)
 
         ltp = float(ohlc_df.iloc[-1:]['close'][0])
@@ -578,20 +574,11 @@ def trade_job(manager, hash_key):
         cache.setValue(hash_key, 'ltp', ltp)
         cache.setValue(hash_key, 'low', low)
         cache.setValue(hash_key, 'high', high)
-
+        
+        time_val = ohlc_df.index[-1].minute+ohlc_df.index[-1].hour*60
+        cutoff_time = (16*60+15)
         last_processed = ohlc_df.index[-1].strftime('%Y-%m-%d %H:%M')
 
-        time_val = ohlc_df.index[-1].minute+ohlc_df.index[-1].hour*60
-        cutoff_time = (15*60+15)
-        pdebug1("{}=>{}".format(last_processed,cache.getValue(hash_key,'last_processed')))
-        
-        if last_processed == cache.getValue(hash_key,'last_processed'):   
-            trade_lock.release()
-            trade_job_sem.release()
-            return
-        else:
-            cache.setValue(hash_key,'last_processed',last_processed)
-        
         # Step 2: Switch to appropriate state machine based on current state
         if state == 'INIT': # State: Init
             # 2: Set state to Scanning
@@ -676,13 +663,15 @@ def trade_job(manager, hash_key):
         elif state == 'SQUAREOFF':  # State: Awaiting Square Off
             # 1: On Fill notification: set state to SCANNING
             cache.setValue(hash_key,'state','SCANNING')
-
-        
-        trade_lock.release()
     except:
         perror('Issue in algotrade')
     finally:
         trade_job_sem.release()
+        trade_lock.release()
+
+#####################################################################################################################
+#### Order Handler: Provides api to buy, sell and cancle order using Kite                                         ###
+#####################################################################################################################
 
 
 def placeorder(prefix, df, stock, last_processed):
@@ -746,13 +735,9 @@ def placeorder(prefix, df, stock, last_processed):
     cache.pushTrade(stock, tmp_df)
 
 
-#####################################################################################################################
-#### Order Handler: Provides api to buy, sell and cancle order using Kite                                         ###
-#####################################################################################################################
-
 def order_handler(manager, msg):
     global kws, kite, kite_api_key
-    pdebug('order_handler: {}'.format(msg))
+    pdebug('order_handler({}): {}'.format(cache_postfix, msg))
     KiteAPIKey = cache.get('KiteAPIKey')
     kite = KiteConnect(api_key=KiteAPIKey)
     access_token = cache.get('access_token')
@@ -798,7 +783,7 @@ def order_handler(manager, msg):
 
 def kite_ticker_handler(manager, msg):
     global kws, kite, kite_api_key, access_token
-    pdebug('live_trade_handler: {}'.format(msg))
+    pdebug('kite_ticker_handler: {}'.format(msg))
     # 1: Start kite websocket connections
     # Initialise
     if msg == 'INIT':
