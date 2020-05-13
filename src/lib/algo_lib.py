@@ -6,7 +6,7 @@ from datetime import timedelta
 from talib import MACD, MACDEXT, RSI, BBANDS, MACD, AROON, STOCHF, ATR, OBV, ADOSC, MINUS_DI, PLUS_DI, ADX, EMA, SMA
 from talib import LINEARREG, BETA, LINEARREG_INTERCEPT, LINEARREG_SLOPE, STDDEV, TSF, ADOSC, VAR, ROC, MIN, MAX, MINMAX
 #from talib import CDLABANDONEDBABY, CDL3BLACKCROWS,CDLDOJI, CDLDOJISTAR, CDLDRAGONFLYDOJI,CDLENGULFING,CDLEVENINGDOJISTAR,CDLEVENINGSTAR, CDLGRAVESTONEDOJI, CDLHAMMER, CDLHANGINGMAN,CDLHARAMI,CDLHARAMICROSS,CDLINVERTEDHAMMER,CDLMARUBOZU,CDLMORNINGDOJISTAR,CDLMORNINGSTAR,CDLSHOOTINGSTAR,CDLSPINNINGTOP,CDL3BLACKCROWS, CDL3LINESTRIKE, CDLKICKING
-from lib.logging_lib import pdebug, pdebug1, pdebug5, perror, pinfo, cache_type
+from lib.logging_lib import pdebug, pdebug1, pdebug5, perror, pinfo, cache_type, pdebug7
 
 # ====== Tradescript Wrapper =======
 # Methods
@@ -43,11 +43,11 @@ def order_details(cache, key, decision = 'WAIT', x2 = -1, qty=-1, sl=-1, tp=-1):
     cache.set('decision'+cache_type,decision)
 
 
-def myalgo(cache, key, ohlc_data_df, algo='', state='SCANNING', quick=False): 
-    #pdebug(ohlc_data_df.shape)
+def myalgo(cache, key, ohlc_data_df, algo=None, state='SCANNING', quick=False): 
+    pdebug7('myalgo {}'.format(key))
 
     if quick == False:
-        ohlc_data_temp = ohlc_data_df.tail(31).head(30) #to reduce calculation load
+        ohlc_data_temp = ohlc_data_df.tail(31).head(30) #to reduce calculation load, remove last candle
     else:
         ohlc_data_temp = ohlc_data_df
 
@@ -86,7 +86,7 @@ def myalgo(cache, key, ohlc_data_df, algo='', state='SCANNING', quick=False):
     cache.set('decision'+cache_type,decision)
    
     try:
-        if algo != '':
+        if algo != '' and algo is not None:
 
             postfix = "update_decision(buy, sell)"
             code = algo + '\n'+ postfix

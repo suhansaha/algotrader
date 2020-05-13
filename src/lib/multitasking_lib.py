@@ -21,8 +21,6 @@ from lib.kite_wrapper_lib import *
 from lib.algo_lib import *
 from lib.data_model_lib import *
 
-logger.setLevel(logging.DEBUG)
-loggerT.setLevel(21)
 # The base thread class to enable multithreading
 class myThread (threading.Thread):
     def __init__(self, manager, name, callback, pubsub=True, msg=""):
@@ -212,7 +210,7 @@ def trade_analysis_raw(trade_log):
 
 # This function is called by Kite or Kite_Simulation
 def notification_despatcher(ws, msg, id='*', Tick=True ):
-    #pdebug('notification_despatcher:{}=>{}'.format(id,msg))
+    pdebug7('notification_despatcher:{}=>{}'.format(id,msg))
     # Step 1: Extract msg type: Tick/Callbacks
     
     # Step 2.1: If Tick
@@ -415,119 +413,128 @@ def kite_simulator(manager, msg):
 trade_job_sem = Semaphore(10)
 ohlc_tick_handler_lock = Lock()
 def ohlc_tick_handler(manager, msg):
-    #ohlc_tick_handler_lock.acquire()
-    pdebug('ohlc_tick_handler({}) - INIT: {}'.format(cache_postfix, msg))
+    with ohlc_tick_handler_lock:
 
-    last_id_msg = '0'
-    cache.set('last_id_msg', last_id_msg)
-     
-    counter = 0
-    while(True):
-        if manager.abort == True:
-            pinfo("Abort Request: ohlc_tick_handler")
-            #cache.xtrim('msgBufferQueue'+cache_postfix,maxlen=0, approximate=False)
-            cache.set('done'+cache_postfix,1)
-            counter = 0
-            ohlc_handler_sem.release()
-            break
+        pdebug('ohlc_tick_handler({}) - INIT: {}'.format(cache_postfix, msg))
+        #if msg != 'start':
+        #    return
+        pdebug('ohlc_tick_handler({}) - START: {}'.format(cache_postfix, msg))
 
-        # Step 1: Blocking call to msgBufferQueue and notificationQueue
-        if cache.xlen('msgBufferQueue'+cache_postfix) == 0:
-            cache.xread({'msgBufferQueue'+cache_postfix:'$'}, block=0, count=5000)
-
-        #last_id_msg = cache.get('last_id_msg')
-        #pinfo(cache.xlen('msgBufferQueue'+cache_postfix))
+        last_id_msg = '0'
+        cache.set('last_id_msg', last_id_msg)
         
-        msgs_q = cache.xread({'msgBufferQueue'+cache_postfix:last_id_msg}, block=2000, count=5000)
-        #cache.xtrim('msgBufferQueue'+cache_postfix,maxlen=0, approximate=False)
-        
-        try:
-            #last_id_msg = cache.get('last_id_msg')
-            last_id_msg = msgs_q[0][1][-1][0]
-        except:
-            perror('Could not read data from msgBufferQueue')
-            break
-        #pinfo(last_id_msg)
-        
-        # Step 3: Process tick: Start a worker thread for each msg       
-        for msg in msgs_q[0][1]:
-            pdebug1('ohlc_tick_handler({}): {}'.format(cache_postfix ,msg))
-            counter = counter + 1
-            val = json.loads(msg[1]['data'])
-            if val == 'done': # Backtest completed, exit gracefully
-                perror("Processing done({}): {}: {}".format(cache_postfix, counter, msg))
-                cache.set('done'+cache_postfix,1) #Trigger to UI thread TODO: Optimize
+        counter = 0
+        while(True):
+            if manager.abort == True:
+                pinfo("Abort Request: ohlc_tick_handler")
+                #cache.xtrim('msgBufferQueue'+cache_postfix,maxlen=0, approximate=False)
+                cache.set('done'+cache_postfix,1)
                 counter = 0
                 ohlc_handler_sem.release()
-
-                #cache.set('last_id_msg', msg[0])
                 break
-            
-            
-            date_val = datetime.fromtimestamp(int(msg[0].split('-')[0])/1000).strftime('%Y-%m-%d %H:%M:%S')
 
-            for data in val:
-                #{'data': '{"tradable": true, "mode": "quote", "instrument_token": 969473, "last_price": 185.0, "last_quantity": 6, "average_price": 187.11, "volume": 4319803, "buy_quantity": 469701, "sell_quantity": 539438, "ohlc": {"open": 185.0, "high": 189.95, "low": 184.1, "close": 184.0}, "change": 0.5434782608695652}'}
-                instrument_token = int(data['instrument_token'])
-                stock_id = cache.hmget('eq_token',instrument_token)[0]
-                hash_key = stock_id
+            pinfo(cache_postfix)
+            # Step 1: Blocking call to msgBufferQueue and notificationQueue
+            if cache.xlen('msgBufferQueue'+cache_postfix) == 0:
+                cache.xread({'msgBufferQueue'+cache_postfix:'$'}, block=1, count=5000)
 
-                ltp = data['last_price'] # Get LTP from the latest msg
-                temp_df = pd.DataFrame(data={'date':[date_val],'ltp':[ltp]})
-                temp_df = temp_df.set_index('date')
-                temp_df.index = pd.to_datetime(temp_df.index)
+            #last_id_msg = cache.get('last_id_msg')
+            #pinfo(cache.xlen('msgBufferQueue'+cache_postfix))
+            
+            msgs_q = cache.xread({'msgBufferQueue'+cache_postfix:last_id_msg}, block=2000, count=5000)
+            #cache.xtrim('msgBufferQueue'+cache_postfix,maxlen=0, approximate=False)
+            
+            try:
+                #last_id_msg = cache.get('last_id_msg')
+                last_id_msg = msgs_q[0][1][-1][0]
+            except:
+                perror('Could not read data from msgBufferQueue')
+                break
+            #pinfo(last_id_msg)
+            
+            # Step 3: Process tick: Start a worker thread for each msg       
+            for msg in msgs_q[0][1]:
+                pdebug7('ohlc_tick_handler({}): {}'.format(cache_postfix ,msg))
+                counter = counter + 1
+                val = json.loads(msg[1]['data'])
+                if val == 'done': # Backtest completed, exit gracefully
+                    perror("Processing done({}): {}: {}".format(cache_postfix, counter, msg))
+                    cache.set('done'+cache_postfix,1) #Trigger to UI thread TODO: Optimize
+                    counter = 0
+                    ohlc_handler_sem.release()
+
+                    #cache.set('last_id_msg', msg[0])
+                    break
                 
-                hdf_freq = cache.getValue(hash_key,'hdf_freq') # Needed to pull data
-                state = cache.getValue(hash_key,'state') # Initialize OHLC buffer
+                
+                date_val = datetime.fromtimestamp(int(msg[0].split('-')[0])/1000).strftime('%Y-%m-%d %H:%M:%S')
 
-                #pdebug('TH: {} =>{}'.format(hash_key, state))
-                if state == 'INIT': # State: Init: Load historical data from cache
-                    # 1: Populate Redis buffer stock+"OHLCBuffer" with historical data
-                    deltaT = getDeltaT(hdf_freq)
+                for data in val:
+                    #{'data': '{"tradable": true, "mode": "quote", "instrument_token": 969473, "last_price": 185.0, "last_quantity": 6, "average_price": 187.11, "volume": 4319803, "buy_quantity": 469701, "sell_quantity": 539438, "ohlc": {"open": 185.0, "high": 189.95, "low": 184.1, "close": 184.0}, "change": 0.5434782608695652}'}
+                    instrument_token = int(data['instrument_token'])
+                    stock_id = cache.hmget('eq_token',instrument_token)[0]
+                    hash_key = stock_id
 
-                    toDate = (temp_df.index[0] - timedelta(days=1)).strftime('%Y-%m-%d')
-                    fromDate = (temp_df.index[0] - deltaT).strftime('%Y-%m-%d')
+                    if stock_id not in cache.getKeys():
+                        perror('Cache not created for: {}'.format(stock_id))
+                        continue
+
+                    ltp = data['last_price'] # Get LTP from the latest msg
+                    temp_df = pd.DataFrame(data={'date':[date_val],'ltp':[ltp]})
+                    temp_df = temp_df.set_index('date')
+                    temp_df.index = pd.to_datetime(temp_df.index)
+                    
+                    hdf_freq = cache.getValue(hash_key,'hdf_freq') # Needed to pull data
+                    state = cache.getValue(hash_key,'state') # Initialize OHLC buffer
+
+                    #pdebug('TH: {} =>{}'.format(hash_key, state))
+                    if state == 'INIT': # State: Init: Load historical data from cache
+                        # 1: Populate Redis buffer stock+"OHLCBuffer" with historical data
+                        deltaT = getDeltaT(hdf_freq)
+
+                        toDate = (temp_df.index[0] - timedelta(days=1)).strftime('%Y-%m-%d')
+                        fromDate = (temp_df.index[0] - deltaT).strftime('%Y-%m-%d')
+
+                        try:
+                            exchange = 'NSE'
+                            ohlc_data = getData(stock_id, fromDate, toDate, exchange, hdf_freq, False, stock_id)
+
+                            ohlc_data = ohlc_data.tail(no_of_hist_candles)
+                            cache.setOHLC(hash_key,ohlc_data)
+                        except:
+                            pwarning('Historical data is not found {} {} {} {} {}'.format(stock_id, fromDate, toDate, exchange, hdf_freq))
+
+                        cache.setValue(hash_key,'state','SCANNING')
+
+                    if not stock_id in trade_lock_store:
+                        trade_lock_store[stock_id] = Lock()
 
                     try:
-                        exchange = 'NSE'
-                        ohlc_data = getData(stock_id, fromDate, toDate, exchange, hdf_freq, False, stock_id)
-
-                        ohlc_data = ohlc_data.tail(no_of_hist_candles)
-                        cache.setOHLC(hash_key,ohlc_data)
+                        cache.pushTICK(stock_id, temp_df)
                     except:
-                        pwarning('Historical data is not found {} {} {} {} {}'.format(stock_id, fromDate, toDate, exchange, hdf_freq))
+                        pwarning('Can not push tick data: {}:{}'.format(stock_id, temp_df))
 
-                    cache.setValue(hash_key,'state','SCANNING')
-
-                if not stock_id in trade_lock_store:
-                    trade_lock_store[stock_id] = Lock()
-
-                try:
-                    cache.pushTICK(stock_id, temp_df)
-                except:
-                    pwarning('Can not push tick data: {}:{}'.format(stock_id, temp_df))
-
-                cache.set('last_id_msg', msg[0])
-                ########## Should I start Trade Job? ###########################
-                
-                mode = cache.getValue(stock_id,'mode') #don't start if mode is paused
-                # Start job to process Tick
-                if manager.abort == False and manager.pause == False and mode != 'PAUSE':
-                    last_processed = temp_df.index[-1].strftime('%Y-%m-%d %H:%M')
- 
-                    pdebug1("{}, {}=>{}".format(temp_df.index[-1], last_processed,cache.getValue(hash_key,'last_processed')))
+                    cache.set('last_id_msg', msg[0])
+                    ########## Should I start Trade Job? ###########################
                     
-                    if last_processed != cache.getValue(hash_key,'last_processed'):  
-                        #pinfo(last_processed)
-                        cache.setValue(hash_key,'last_processed',last_processed)
+                    mode = cache.getValue(stock_id,'mode') #don't start if mode is paused
+                    # Start job to process Tick
+                    if manager.abort == False and manager.pause == False and mode != 'PAUSE':
+                        last_processed = temp_df.index[-1].strftime('%Y-%m-%d %H:%M')
+    
+                        pdebug1("{}, {}=>{}".format(temp_df.index[-1], last_processed,cache.getValue(hash_key,'last_processed')))
+                        
+                        if last_processed != cache.getValue(hash_key,'last_processed'):  
+                            #pinfo(last_processed)
+                            cache.setValue(hash_key,'last_processed',last_processed)
 
-                        pdebug1('start trade job')
-                        trade_job_sem.acquire()
-                        manager.add(stock_id, trade_job, False, hash_key)
-                else:
-                    pwarning('Algotrade Paused for {}:[abort:{}, pause:{}, mode:{}]'.format(stock_id, manager.abort, manager.pause, mode))
-                
-            ohlc_handler_sem.release()
+                            pdebug7('start trade job')
+                            trade_job_sem.acquire()
+                            manager.add(stock_id, trade_job, False, hash_key)
+                    else:
+                        pwarning('Algotrade Paused for {}:[abort:{}, pause:{}, mode:{}]'.format(stock_id, manager.abort, manager.pause, mode))
+                    
+                ohlc_handler_sem.release()
     
     #ohlc_tick_handler_lock.release()
 
@@ -535,7 +542,7 @@ def trade_job(manager, hash_key):
     if manager.abort == True or manager.pause == True:
         return
 
-    pdebug1('trade_job: {}'.format(hash_key))
+    pdebug7('trade_job: {}'.format(hash_key))
     
     if cache.getValue('WIPRO').empty:
         perror('Exiting tradejob as there is no cache')
@@ -547,7 +554,7 @@ def trade_job(manager, hash_key):
         trade_lock = trade_lock_store[stock]
         trade_lock.acquire()
     except:
-        perror('Exiting trade job as could not get lock')
+        perror('Exiting trade job as could not get lock {}'.format(stock))
         trade_job_sem.release()
         return
     try:
@@ -690,31 +697,31 @@ def placeorder(prefix, df, stock, last_processed):
     pl_pt = 0
     totalprofit =  float(cache.getValue(stock,'Total P&L'))
 
-    pdebug5("Place Order: {},{},{},{}".format(ltp[0], price, profit, totalprofit))
+    pdebug("Place Order: {},{},{},{}".format(ltp[0], price, profit, totalprofit))
     tmp_df = pd.DataFrame()
     if prefix == "B: EN: ":
         tmp_df['buy'] = ltp
         sl = ltp[0] * ( 1 - sl_pt / 100 )
         tp =  ltp[0] * ( 1 + tp_pt / 100 )
         price = ltp[0] 
-        cache.publish('order_handlerlive',json.dumps({'cmd':'buy','symbol':stock,'price':ltp[0],'qty':qty}))
+        cache.publish('order_handler'+cache_postfix,json.dumps({'cmd':'buy','symbol':stock,'price':ltp[0],'qty':qty}))
     elif prefix == "B: EX: " or prefix == "B: SL: " or prefix == "B: TP: ":
         tmp_df['buy'] = ltp
         profit = (price - ltp[0]) * qty
         pl_pt = profit/price * 100
-        cache.publish('order_handlerlive',json.dumps({'cmd':'buy','symbol':stock,'price':ltp[0],'qty':qty}))
+        cache.publish('order_handler'+cache_postfix,json.dumps({'cmd':'buy','symbol':stock,'price':ltp[0],'qty':qty}))
         price = 0
     elif prefix == "S: EN: ":
         tmp_df['sell'] = ltp
         sl = ltp[0] * ( 1 + sl_pt / 100 )
         tp =  ltp[0] * ( 1 - tp_pt / 100 )
         price = ltp[0] 
-        cache.publish('order_handlerlive',json.dumps({'cmd':'sell','symbol':stock,'price':ltp[0],'qty':qty}))
+        cache.publish('order_handler'+cache_postfix,json.dumps({'cmd':'sell','symbol':stock,'price':ltp[0],'qty':qty}))
     elif prefix == "S: EX: " or prefix == "S: SL: " or prefix == "S: TP: ":
         tmp_df['sell'] = ltp
         profit = (ltp[0] - price) * qty
         pl_pt = profit/price * 100
-        cache.publish('order_handlerlive',json.dumps({'cmd':'sell','symbol':stock,'price':ltp[0],'qty':qty}))
+        cache.publish('order_handler'+cache_postfix,json.dumps({'cmd':'sell','symbol':stock,'price':ltp[0],'qty':qty}))
         price = 0
 
     totalprofit = totalprofit + profit
@@ -755,25 +762,35 @@ def order_handler(manager, msg):
             symbol = msg_j['symbol']
             price = float(msg_j['price'])
             quantity = int(msg_j['qty'])
-            pinfo('Placeorder-{}: {}: {}: {}'.format(cmd, symbol, price, quantity))
-            order_id = buy_limit(kite, symbol, price, quantity)
-            cache.setValue(symbol,'order_id', order_id)
+            mode = cache.getValue(symbol, 'mode')
+            pinfo('Placeorder({}):{}: {}: {}x{}'.format(mode, cmd, symbol, quantity, price))
+            if mode == 'live':
+                order_id = buy_limit(kite, symbol, price, quantity)
+                cache.setValue(symbol,'order_id', order_id)
         elif cmd == 'sell':
             symbol = msg_j['symbol']
             price = float(msg_j['price'])
             quantity = int(msg_j['qty'])
-            pinfo('Placeorder-{}: {}: {}: {}'.format(cmd, symbol, price, quantity))
-            order_id = sell_limit(kite, symbol, price, quantity)
-            cache.setValue(symbol,'order_id', order_id)
+            mode = cache.getValue(symbol, 'mode')
+            pinfo('Placeorder({}):{}: {}: {}x{}'.format(mode, cmd, symbol, quantity, price))
+
+            if mode == 'live':
+                order_id = sell_limit(kite, symbol, price, quantity)
+                cache.setValue(symbol,'order_id', order_id)
         elif cmd == 'cancel':
-            symbol = msg_j['symbol']
-            pinfo(symbol)
-            cancel_order(kite, [symbol])
+            mode = cache.getValue(symbol, 'mode')
+            pinfo('Cancel Order({})'.format(mode))
+
+            if mode == 'live':
+                symbol = msg_j['symbol']
+                #pinfo(symbol)
+                cancel_order(kite, [symbol])
         elif cmd == 'cancelAll':
             cancel_all(kite)
         elif cmd == 'getOrder':
             pinfo(getOrders(kite))
     except:
+        perror('Error in order handler')
         pass
 
 
@@ -786,6 +803,9 @@ def kite_ticker_handler(manager, msg):
     pdebug('kite_ticker_handler: {}'.format(msg))
     # 1: Start kite websocket connections
     # Initialise
+    if (cache.get('Kite_Status') !='connected' or kws is None ) and msg != 'INIT':
+        return
+
     if msg == 'INIT':
         try:
             cache.set('KiteAPIKey',kite_api_key)
@@ -798,6 +818,7 @@ def kite_ticker_handler(manager, msg):
             kws.on_ticks = on_ticks
             kws.on_connect = on_connect
             kws.on_order_update = on_order_update
+            #kws.on_close = on_close
             cache.publish('kite_ticker_handler'+cache_postfix,'START')
         except Exception as e:
             perror('Could not connect to KITE server: {}'.format(e))
@@ -809,6 +830,8 @@ def kite_ticker_handler(manager, msg):
     elif msg == 'STATUS':
         pinfo(kws.is_connected())
     elif msg == 'CLOSE':
+        cache.set('Kite_Status','closed')
+        cache.publish('ohlc_tick_handler'+cache_id,'stop')
         #cache.publish('ohlc_tick_handler'+cache_id,'stop')
         kws.close()
     elif msg == 'profile':
@@ -841,25 +864,26 @@ def kite_ticker_handler(manager, msg):
 
 def on_ticks(ws, ticks):
   # Callback to receive ticks.
-  #pdebug("Ticks: {}".format(ticks))
+  pdebug("Ticks: {}".format(ticks))
   #for tick in ticks:
   notification_despatcher(ws, ticks)
 
 
 def on_connect(ws, response):
-
     pinfo('connected')
-    ws.cache = cache_state(cache_id)
-    ws.cache.publish('ohlc_tick_handler'+cache_id,'start')
-
-    value = list(map(int,ws.cache.smembers('ticker_list'))) #Initialize
+    cache = cache_state(cache_id)
+    
+    value = list(map(int,cache.smembers('ticker_list'))) #Initialize
+    pinfo(value)
     if len(value) > 0:
         ws.subscribe(value)
         ws.set_mode(ws.MODE_LTP, value)
 
     #ws.cache = cache_state(cache_id)
-    ws.cache.set('Kite_Status','connected')
-    pinfo('Exiting on connected')
+    cache.set('Kite_Status','connected')
+
+    cache.publish('ohlc_tick_handler'+cache_id,'start')
+    #pinfo('Exiting on connected')
 
   # Callback on successful connect.
   # Subscribe to a list of instrument_tokens (RELIANCE and ACC here).
@@ -874,11 +898,14 @@ def on_connect(ws, response):
   #ws.set_mode(ws.MODE_MODE_QUOTE, [2714625,779521]) 
 
 def on_close(ws, code, reason):
+
+  cache = cache_state(cache_id)
   # On connection close stop the main loop
   # Reconnection will not happen after executing `ws.stop()`
-  ws.cache.set('Kite_Status','close')
+  cache.set('Kite_Status','closed')
+  cache.publish('ohlc_tick_handler'+cache_id,'stop')
   #ws.cache.xtrim('msgBufferQueue'+cache_postfix, 0, False)
-  notification_despatcher(ws,'done')
+  #notification_despatcher(ws,'done')
   ws.stop()
   pinfo('Exiting on close')
 

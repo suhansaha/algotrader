@@ -4,18 +4,20 @@ from redis import Redis
 #logging.basicConfig(filemode='w+')
 #logging.basicConfig(format='%(levelname)s:\t%(message)s', datefmt='%m-%d %H:%M:%S')
 logger = logging.getLogger('freedom')
-logger.setLevel(0)
+logger.setLevel(logging.DEBUG)
 
 # Stream handlers
 c_handler = logging.StreamHandler()
-c_format = logging.Formatter('%(levelname)s:\t%(message)s')
-c_handler.setLevel(logging.DEBUG)
+c_format = logging.Formatter('%(asctime)s %(levelname)s:\t%(message)s')
+c_handler.setLevel(7)
 c_handler.setFormatter(c_format)
 logger.addHandler(c_handler)
 
+logfile = 'freedom.log'
+
 # File handlers
-f_handler = logging.FileHandler('log/freedom.log', mode='w')
-f_handler.setLevel(0)
+f_handler = logging.FileHandler('log/'+logfile, mode='w')
+f_handler.setLevel(7)
 #f_format = logging.Formatter('%(levelname)s - %(message)s')
 f_handler.setFormatter(c_format)
 logger.addHandler(f_handler)
@@ -41,7 +43,8 @@ loggerT.addHandler(ft_handler)
 
 pdebug = lambda x: logger.debug(x)
 pdebug1 = lambda x: logger.log(1, x) # Tick: Very heavy logging
-pdebug5 = lambda x: logger.log(5, x) # Print dataframes
+pdebug5 = lambda x: logger.log(5, x) # Print datadownload
+pdebug7 = lambda x: logger.log(7, x) # Print flow of tick msg
 pinfo = lambda x: logger.info(x)
 perror = lambda x: logger.error(x)
 pexception = lambda x: logger.critical(x)
@@ -78,3 +81,5 @@ logtrade = lambda x: loggerT.log(25, x)
 #INFO: 20
 #DEBUG: 10
 #NOTSET: 0
+
+# 7: test flow of packets

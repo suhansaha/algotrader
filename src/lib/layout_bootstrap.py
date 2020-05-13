@@ -73,7 +73,7 @@ form_div = html.Div([
                 dbc.Col(dbc.InputGroup([ dbc.InputGroupAddon("TP", addon_type="prepend"),dbc.Input(id="input-target", placeholder="0.0", value=1),dbc.InputGroupAddon("%", addon_type="append") ], size="sm"),width=2),
                 dbc.Col( dbc.InputGroup([ dcc.DatePickerRange( id='date-picker-range', end_date=cal_end_date, start_date=cal_start_date),
                                             dbc.Select(id='freq', value='1D', options=freq_options )], size="sm"), width=6, sm='12', md=5),
-                dbc.Col(dbc.Button('Go', id='button', color="success", disabled=True, size='sm'),width=1),
+                dbc.Col(dbc.Button('Go', id='button', color="success", disabled=True, size='sm', n_clicks=0),width=1),
                 dbc.Col(dbc.Checklist(
                         options=[
                             {"label": "Quick", "value": 1},
@@ -152,9 +152,10 @@ else:
 trade_tab = dbc.Row([
     dbc.Col( 
         [dbc.Row(dbc.Col(dcc.Dropdown(id='stock_picker_live', multi=True,  className='columns six', options=stock_options))),
-         dbc.Row([dbc.Col( [dbc.Button("Start", id="live-start",color="success"),
-                            #dbc.Button("Pause", id="live-pause",color="warning"),
-                            dbc.Button("Stop", id="live-stop",color="danger", disabled=True)]),
+         dbc.Row([dbc.Col( [
+             #dbc.Button("Init", id="live-init",color="Primary", n_clicks = 0, disabled=False),
+                            dbc.Button("Start", id="live-start",color="success", n_clicks = 0, disabled=False),
+                            dbc.Button("Stop", id="live-stop",color="danger", disabled=True, n_clicks = 0)]),
                    ]),
          dbc.Row(dbc.Col(trade_table, style={'padding-left':'20px'}))
         ]

@@ -21,6 +21,7 @@ services:
     depends_on:
       - redis
       - db
+      - live
     restart: always
   backtest:
     image: suhansaha/talib_kite-alpine

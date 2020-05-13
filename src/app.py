@@ -39,8 +39,6 @@ def start_backtest(n_clicks, stocks, qty, sl, target, start_date, end_date, algo
     if n_clicks == 0:
         return 0
     
-    #pinfo(len(mode))
-
     if len(mode) > 0:
         backtest = 'quick'
     else:
@@ -79,7 +77,7 @@ def start_backtest(n_clicks, stocks, qty, sl, target, start_date, end_date, algo
      Input('button', 'n_clicks')])
 def update_intervals(n_intervals, clicks):
     pdebug1("Update Intervals: {}: {}".format(n_intervals, redis_conn.get('done')))
-
+ 
     # if done is set to 1 then backtest is complete -> Time to disable interval and enable backtest button
     if redis_conn.get('done'+cache_type) == "1": # Backtest complete
         pdebug("Returning True: Disable Interval")
@@ -110,8 +108,6 @@ def update_output(n_intervals, value, chart_type ):
     stock = value
     pdebug1("In update output: {}".format(stock))
     
-    
-
     try:
         fh = open('log/freedom_trade.log','r')
         logMsg = fh.read()
@@ -211,11 +207,10 @@ def add_row(value, ts, rows, columns):
     df_updates = pd.DataFrame.from_dict(rows)
     df_cache = live_cache.getValue()
     
-
     if df_updates.shape[0] > 0 and df_cache.shape[0] > 0: # Cache is not empty: need to distinguish new vs update
         for stock in df_cache[ df_cache['stock'].isin(df_updates['stock']) == False]['stock']: #Stocks which are present in cache but not in GUI
-            live_cache.remove(stock)
             pinfo("Removed stock: {}".format(stock))
+            live_cache.remove(stock)
             #TODO: Send message to unsubscribe
 
             #token = int(live_cache.hmget('eq_token',stock)[0])
@@ -289,15 +284,20 @@ import time
     [State('live-start', 'disabled'),State('live-stop', 'disabled')] )
 def toggle_trade(n1, n2, d1, d2):
     live_cache = cache_state(cache_id)
-    if n1 > 0 and d1 == True: #Trade is onoging
+
+    if n2 > 0 and d1 == True: #Trade is onoging
+        if live_cache.get('Kite_Status') == 'connected':
+            live_cache.publish('kite_ticker_handlerlive', 'CLOSE')
         pinfo('Stop Trade')
-        live_cache.publish('kite_ticker_handlerlive', 'CLOSE')
+        
         return False, True
-    elif  d2 == True: # Trade is stopped
+    elif n1 > 0 and d2 == True: # Trade is stopped
+        if live_cache.get('Kite_Status') != 'connected':
+            live_cache.publish('kite_ticker_handlerlive', 'START')
         pinfo('Start Trade')
-        live_cache.publish('kite_ticker_handlerlive', 'START')
         return True, False
 
+    return False, True
 
 #@dash_app.callback(
 #    Output("live-stop", "active"),

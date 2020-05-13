@@ -1,4 +1,4 @@
-from lib.logging_lib import pdebug, pdebug1, pdebug5, perror, pinfo, cache_id
+from lib.logging_lib import pdebug5, perror, pinfo, cache_id
 from lib.data_model_lib import *
 import pandas as pd
 import datetime as dt
@@ -109,7 +109,7 @@ def portfolioDownload(stocklist, toDate):
 def buy_limit(kite, symbol, price, quantity=1, tag='freedom_v2'): 
     pinfo("B Limit: {}[{}]=> {}".format(symbol, quantity, price))
 
-    return
+    #return -1
     try:
         order_id = kite.place_order(tradingsymbol=symbol,
                                 exchange=kite.EXCHANGE_NSE,
@@ -133,7 +133,7 @@ def buy_limit(kite, symbol, price, quantity=1, tag='freedom_v2'):
 def sell_limit(kite, symbol, price, quantity=1, tag='freedom_v2'):
     pinfo("S Limit: {}[{}]=> {}".format(symbol, quantity, price))
 
-    return
+    #return -1
     try:
         order_id = kite.place_order(tradingsymbol=symbol,
                             exchange=kite.EXCHANGE_NSE,
