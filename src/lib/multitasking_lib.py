@@ -20,6 +20,7 @@ from lib.logging_lib import *
 from lib.kite_wrapper_lib import *
 from lib.algo_lib import *
 from lib.data_model_lib import *
+timestamp_to_id = lambda x:str(int(float(x)*1000))+'-'+str(0)
 
 # The base thread class to enable multithreading
 class myThread (threading.Thread):
@@ -416,10 +417,6 @@ def ohlc_tick_handler(manager, msg):
     with ohlc_tick_handler_lock:
 
         pdebug('ohlc_tick_handler({}) - INIT: {}'.format(cache_postfix, msg))
-        #if msg != 'start':
-        #    return
-        pdebug('ohlc_tick_handler({}) - START: {}'.format(cache_postfix, msg))
-
         last_id_msg = '0'
         cache.set('last_id_msg', last_id_msg)
         
@@ -520,19 +517,22 @@ def ohlc_tick_handler(manager, msg):
                     mode = cache.getValue(stock_id,'mode') #don't start if mode is paused
                     # Start job to process Tick
                     if manager.abort == False and manager.pause == False and mode != 'PAUSE':
-                        last_processed = temp_df.index[-1].strftime('%Y-%m-%d %H:%M')
+                        #last_processed = temp_df.index[-1].strftime('%Y-%m-%d %H:%M')
+                        last_processed = float(cache.getValue(hash_key,'last_processed'))
+                        curr_processed = int(msg[0].split('-')[0])/1000
+                        next_processed = float(last_processed + 60)
     
-                        pdebug1("{}, {}=>{}".format(temp_df.index[-1], last_processed,cache.getValue(hash_key,'last_processed')))
+                        #pdebug("{}, {}=>{}=>{}".format(temp_df.index[-1], last_processed, curr_processed, next_processed))
                         
-                        if last_processed != cache.getValue(hash_key,'last_processed'):  
+                        if curr_processed >= next_processed:  
                             #pinfo(last_processed)
-                            cache.setValue(hash_key,'last_processed',last_processed)
+                            cache.setValue(hash_key,'last_processed',curr_processed)
 
-                            pdebug7('start trade job')
+                            pdebug('start trade job: {}=>{}'.format(stock_id, curr_processed))
                             trade_job_sem.acquire()
                             manager.add(stock_id, trade_job, False, hash_key)
                     else:
-                        pwarning('Algotrade Paused for {}:[abort:{}, pause:{}, mode:{}]'.format(stock_id, manager.abort, manager.pause, mode))
+                        pdebug1('Algotrade Paused for {}:[abort:{}, pause:{}, mode:{}]'.format(stock_id, manager.abort, manager.pause, mode))
                     
                 ohlc_handler_sem.release()
     

@@ -1,4 +1,5 @@
 from lib.multitasking_lib import *
+logger.setLevel(logging.DEBUG)
 
 instruments_df = pd.read_hdf('data/instruments.h5',key='instruments')
 eq_nse = instruments_df.loc[(instruments_df['exchange']=='NSE') & (instruments_df['segment']=='NSE')  & (instruments_df['instrument_type']=='EQ'), ['instrument_token','tradingsymbol']]

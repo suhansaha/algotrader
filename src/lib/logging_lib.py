@@ -4,7 +4,7 @@ from redis import Redis
 #logging.basicConfig(filemode='w+')
 #logging.basicConfig(format='%(levelname)s:\t%(message)s', datefmt='%m-%d %H:%M:%S')
 logger = logging.getLogger('freedom')
-logger.setLevel(7)
+logger.setLevel(logging.DEBUG)
 
 # Stream handlers
 c_handler = logging.StreamHandler()
@@ -14,6 +14,8 @@ c_handler.setFormatter(c_format)
 logger.addHandler(c_handler)
 
 logfile = 'freedom.log'
+
+logger.debug(logfile)
 
 # File handlers
 f_handler = logging.FileHandler('log/'+logfile, mode='w')
