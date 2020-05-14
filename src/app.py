@@ -199,13 +199,29 @@ def console_cmd(n_clicks, n_submit, cmd ):
 @dash_app.callback(
     [Output('table-editing-simple', 'data'),
     Output('table-editing-simple', 'columns')],
-    [Input('stock_picker_live', 'value'), Input('table-editing-simple', 'data_timestamp')],
+    [Input('stock_picker_live', 'value'), Input('table-editing-simple', 'data_timestamp')
+    , Input('live-table-update', 'n_intervals')],
     [State('table-editing-simple', 'data'),
      State('table-editing-simple', 'columns')])
-def add_row(value, ts, rows, columns):
+def add_row(value, ts, n_intervals, rows, columns):
     live_cache = cache_state(cache_id)
     df_updates = pd.DataFrame.from_dict(rows)
     df_cache = live_cache.getValue()
+
+    df = df_cache
+
+
+    #TODO: Send message to live_trade_handler
+
+    if df.shape[0] > 0:
+        df = df[['stock', 'qty', 'TP %', 'SL %', 'algo', 'freq', 'mode', 'state', 'ltp',
+       'amount', 'price','P&L','P&L %', 'Total P&L', 'Total P&L %','low', 'sl',  'ltp %','tp', 'high', 'last_processed']]
+            
+        return df.to_dict('records'), [{"name": i, "id": i} for i in df.columns]
+    else:
+        return [],[{}]
+
+    #TODO : to be fixed, current implementation is causing serious issues
     
     if df_updates.shape[0] > 0 and df_cache.shape[0] > 0: # Cache is not empty: need to distinguish new vs update
         for stock in df_cache[ df_cache['stock'].isin(df_updates['stock']) == False]['stock']: #Stocks which are present in cache but not in GUI
@@ -284,6 +300,7 @@ import time
     [State('live-start', 'disabled'),State('live-stop', 'disabled')] )
 def toggle_trade(n1, n2, d1, d2):
     live_cache = cache_state(cache_id)
+    return False, True
 
     if n2 > 0 and d1 == True: #Trade is onoging
         if live_cache.get('Kite_Status') == 'connected':

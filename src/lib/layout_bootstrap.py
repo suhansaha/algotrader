@@ -155,7 +155,9 @@ trade_tab = dbc.Row([
          dbc.Row([dbc.Col( [
              #dbc.Button("Init", id="live-init",color="Primary", n_clicks = 0, disabled=False),
                             dbc.Button("Start", id="live-start",color="success", n_clicks = 0, disabled=False),
-                            dbc.Button("Stop", id="live-stop",color="danger", disabled=True, n_clicks = 0)]),
+                            dbc.Button("Stop", id="live-stop",color="danger", disabled=True, n_clicks = 0),
+                            dcc.Interval( id='live-table-update', interval=1000, n_intervals=0, max_intervals=-1, disabled = False)
+                            ]),
                    ]),
          dbc.Row(dbc.Col(trade_table, style={'padding-left':'20px'}))
         ]

@@ -803,7 +803,7 @@ def kite_ticker_handler(manager, msg):
     pdebug('kite_ticker_handler: {}'.format(msg))
     # 1: Start kite websocket connections
     # Initialise
-    if (cache.get('Kite_Status') !='connected' or kws is None ) and msg != 'INIT':
+    if kws is None and msg != 'INIT':
         return
 
     if msg == 'INIT':

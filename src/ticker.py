@@ -13,6 +13,6 @@ if __name__ == "__main__":
             #live_cache.publish('ohlc_tick_handler'+cache_id,'start')
             break
         live_cache.publish('kite_ticker_handler'+cache_id,'INIT')
-        time.sleep(30)
+        time.sleep(60)
 
 
