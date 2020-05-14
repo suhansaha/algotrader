@@ -14,10 +14,13 @@ app.secret_key = os.urandom(24)
 dash_app = dash.Dash(__name__, server=app, external_stylesheets=external_stylesheets)
 dash_app.layout = layout_bootstrap
 
-redis_conn.set('done'+cache_type,1)
+
+backtest_cache = cache_state(cache_type)
+live_cache = cache_state(cache_id)
+backtest_cache.set('done'+cache_type,1)
 
 def store_algo(algo, algo_name="default"):
-    redis_conn.hset("algos",algo_name, algo)
+    live_cache.hset("algos",algo_name, algo)
     algo_f = open("log/"+algo_name+".txt", "w")
     algo_f.write(algo)
     algo_f.close()
@@ -60,13 +63,13 @@ def start_backtest(n_clicks, stocks, qty, sl, target, start_date, end_date, algo
     pdebug1(backtest_msg)
     # Step 2: Store the stock name under backtest in the redis cache
     for stock in stocks:
-        redis_conn.set('stock',stock) #TODO: replace
+        backtest_cache.set('stock',stock) #TODO: replace
 
     # Step 4: Done is set to 0: Backtest is in progress, will be resetted by backtest job
-    redis_conn.set('done'+cache_type,0)
+    backtest_cache.set('done'+cache_type,0)
     # Step 5: Send the msg to backtest thread to initiate the back test
     pdebug(json.dumps(backtest_msg))
-    redis_conn.publish('kite_simulator'+cache_type,json.dumps(backtest_msg))
+    backtest_cache.publish('kite_simulator'+cache_type,json.dumps(backtest_msg))
     
     # Step 6: Return 0 to reset n_intervals count
     return 0 
@@ -76,10 +79,10 @@ def start_backtest(n_clicks, stocks, qty, sl, target, start_date, end_date, algo
     [Input('graph-update', 'n_intervals'), 
      Input('button', 'n_clicks')])
 def update_intervals(n_intervals, clicks):
-    pdebug1("Update Intervals: {}: {}".format(n_intervals, redis_conn.get('done')))
+    pdebug1("Update Intervals: {}: {}".format(n_intervals, backtest_cache.get('done')))
  
     # if done is set to 1 then backtest is complete -> Time to disable interval and enable backtest button
-    if redis_conn.get('done'+cache_type) == "1": # Backtest complete
+    if backtest_cache.get('done'+cache_type) == "1": # Backtest complete
         pdebug("Returning True: Disable Interval")
         return True, False, 'Go' 
     else: # Backtest is in progress
@@ -122,9 +125,9 @@ def update_output(n_intervals, value, chart_type ):
     if stock == '':
         return fig, 'logMsg', 'No option selected', ''
 
-    summary_stat = redis_conn.hget(stock+cache_type, 'last_processed')
+    summary_stat = datetime.fromtimestamp(float(backtest_cache.hget(stock+cache_type, 'last_processed')))
 
-    if redis_conn.get('done'+cache_type) == "1":
+    if backtest_cache.get('done'+cache_type) == "1":
         fig = freedom_chart(stock, cache_type, chart_type) ## to reduce load on processor
         trade_df = pd.read_json( redis_conn.get(stock+cache_type+'Trade') )
 
@@ -138,8 +141,11 @@ def update_output(n_intervals, value, chart_type ):
             trade_log_df['profit'] = trade_log_df['profit'].map("{:,.02f}".format)
             trade_log_df['CumProfit'] = trade_log_df['CumProfit'].map("{:,.02f}".format)
             trade_log_df['date'] = trade_log_df.index
-            #trade_log_df = trade_log_df.map("{:,.0f}".format)
-            trade_summary = df_to_table(trade_log_df[['date','mode','buy','sell','profit','CumProfit']], 'trade_summary_table', False)
+            #trade_log_df = trade_log_df.map("{:,.0f}".format) backtest_cache
+            if 'mode' in trade_log_df.columns:
+                trade_summary = df_to_table(trade_log_df[['date','mode','buy','sell','profit','CumProfit']], 'trade_summary_table', False)
+            else:
+                trade_summary = df_to_table(trade_log_df[['date','mode','buy','sell','profit','CumProfit']], 'trade_summary_table', False)
         except:
             trade_summary = 'not enough data'
   
@@ -164,7 +170,7 @@ def save_algo(n, algo, algo_name, is_open ):
         msg= "Failed to Save algo "+algo_name
         return
 
-    algo_list = redis_conn.hkeys('algos')
+    algo_list = backtest_cache.hkeys('algos')
     algo_list_options = pd.DataFrame({'label':algo_list,'value':algo_list}).to_dict(orient='records')
     if n:
         alert_is_open =  not is_open
@@ -176,7 +182,7 @@ def save_algo(n, algo, algo_name, is_open ):
     [Input('select_algo', 'value')] )
 def update_algo(algo_name ):
 
-    algo = redis_conn.hget('algos',algo_name)
+    algo = backtest_cache.hget('algos',algo_name)
     return algo, algo_name
 
 @dash_app.callback(
@@ -195,45 +201,66 @@ def console_cmd(n_clicks, n_submit, cmd ):
     return console_log
 
 
+is_connected = lambda : True if live_cache.get('Kite_Status') == 'connected' or live_cache.get('Kite_Status') == 'connecting' else False 
+import time
 
-@dash_app.callback(
-    [Output('table-editing-simple', 'data'),
-    Output('table-editing-simple', 'columns')],
-    [Input('stock_picker_live', 'value'), Input('table-editing-simple', 'data_timestamp')
-    , Input('live-table-update', 'n_intervals')],
-    [State('table-editing-simple', 'data'),
-     State('table-editing-simple', 'columns')])
-def add_row(value, ts, n_intervals, rows, columns):
-    live_cache = cache_state(cache_id)
-    df_updates = pd.DataFrame.from_dict(rows)
-    df_cache = live_cache.getValue()
-
-    df = df_cache
-
-
-    #TODO: Send message to live_trade_handler
-
+def get_live_table(df):
     if df.shape[0] > 0:
-        df = df[['stock', 'qty', 'TP %', 'SL %', 'algo', 'freq', 'mode', 'state', 'ltp',
-       'amount', 'price','P&L','P&L %', 'Total P&L', 'Total P&L %','low', 'sl',  'ltp %','tp', 'high', 'last_processed']]
+        df = df[['stock', 'qty', 'TP %', 'SL %', 'algo', 'freq', 'mode', 'state', 'ltp','last_processed',
+       'amount', 'price','P&L','P&L %', 'Total P&L', 'Total P&L %','low', 'sl',  'ltp %','tp', 'high']]
             
         return df.to_dict('records'), [{"name": i, "id": i} for i in df.columns]
     else:
         return [],[{}]
 
-    #TODO : to be fixed, current implementation is causing serious issues
-    
-    if df_updates.shape[0] > 0 and df_cache.shape[0] > 0: # Cache is not empty: need to distinguish new vs update
-        for stock in df_cache[ df_cache['stock'].isin(df_updates['stock']) == False]['stock']: #Stocks which are present in cache but not in GUI
-            pinfo("Removed stock: {}".format(stock))
-            live_cache.remove(stock)
-            #TODO: Send message to unsubscribe
+@dash_app.callback(
+    [Output('table-editing-simple', 'data'),
+    Output('table-editing-simple', 'columns')
+    ],
+    [Input('stock_picker_live', 'value'), Input('table-editing-simple', 'data_timestamp') , Input('live-table-update', 'n_intervals')],
+    [State('table-editing-simple', 'data'),
+     State('table-editing-simple', 'columns')])  
+def add_row(values, ts, n_intervals, rows, columns):
+    df_table_new = pd.DataFrame.from_dict(rows)
+    df_cache = live_cache.getValue()
+    cache_keys =  live_cache.getKeys()
 
-            #token = int(live_cache.hmget('eq_token',stock)[0])
-            #live_cache.srem('ticker_list',token)
-            #live_cache.publish('kite_ticker_handlerlive', json.dumps({'cmd':'remove','value':[token], 'mode':'ltp'}))
+    if values is not None: #Addition of new stock in the list
+        for value in values:
+            if value not in cache_keys:
+                symbol = value
+                live_cache.add(symbol)
+                live_cache.setValue(symbol,'qty','1')
+                live_cache.setValue(symbol,'SL %','0.4')
+                live_cache.setValue(symbol,'TP %','1')
+                live_cache.setValue(symbol,'algo','haikin_1_new')
+                live_cache.setValue(symbol,'freq','1T')
+                live_cache.setValue(symbol,'last_processed',datetime.now().timestamp())
+                live_cache.setValue(symbol,'mode','paper')
 
-        for index, row in  df_updates.iterrows():  #Stocks which are present in cache
+                token = int(live_cache.hmget('eq_token',symbol)[0])
+
+                live_cache.sadd('ticker_list',token)
+                
+                stock_list = list(map(int,live_cache.smembers('ticker_list')))
+
+                live_cache.publish('kite_ticker_handlerlive', json.dumps({'cmd':'add','value':stock_list,'mode':'ltp'}))
+                return get_live_table(live_cache.getValue())
+
+    #TODO: Removal of last stock
+    if df_cache.shape[0] > df_table_new.shape[0]: # Removal of stock
+        for key in cache_keys:
+            try:
+                if not key in df_table_new['stock'].values:
+                    symbol = key
+                    token = int(live_cache.hmget('eq_token',symbol)[0])
+                    live_cache.srem('ticker_list',token)
+                    live_cache.publish('kite_ticker_handlerlive', json.dumps({'cmd':'remove','value':[token],'mode':'ltp'}))
+                    live_cache.remove(symbol)
+            except:
+                pass
+
+    for index, row in  df_table_new.iterrows():  
             pinfo("Updated stock: {}".format(row['stock']))
             live_cache.setValue(row['stock'], 'qty', row['qty'])
             live_cache.setValue(row['stock'], 'TP %', row['TP %'])
@@ -250,68 +277,27 @@ def add_row(value, ts, n_intervals, rows, columns):
                 order_id = live_cache.getValue(row['stock'], 'order_id')
                 #TODO: User initiated Buy/Sell, Cancel
             live_cache.setValue(row['stock'], 'state', row['state'])
-    else: #both zero
-        pinfo("Remove all the stock")
-        
-        #token = int(live_cache.hmget('eq_token',df_updates['stock'])[0])
-        #live_cache.srem('ticker_list',token)
-        #live_cache.publish('kite_ticker_handlerlive', json.dumps({'cmd':'remove','value':[token], 'mode':'ltp'}))
-        live_cache.remove()
-        
-    try:
-        for stock in value: #Changes done in the selector
-            live_cache.add(stock)
-            #live_cache.setValue(stock,'qty','1')
-            #live_cache.setValue(stock,'SL %','0.4')
-            #live_cache.setValue(stock,'TP %','1')
-            #live_cache.setValue(stock,'algo','haikin_1_new')
-            #live_cache.setValue(stock,'freq','1T')
-            #live_cache.setValue(stock,'mode','paper')
+ 
+    return get_live_table(live_cache.getValue())
 
-            pinfo("Added stock: {}".format(stock))
-
-            #Send message to subscribe for the stock
-            
-            token = int(live_cache.hmget('eq_token',stock)[0])
-            live_cache.sadd('ticker_list',token)
-            live_cache.publish('kite_ticker_handlerlive', json.dumps({'cmd':'add','value':[token], 'mode':'ltp'}))
-            
-    except:
-        pass
-
-
-    df = live_cache.getValue()
-
-
-    #TODO: Send message to live_trade_handler
-
-    if df.shape[0] > 0:
-        df = df[['stock', 'qty', 'TP %', 'SL %', 'algo', 'freq', 'mode', 'state',
-       'amount', 'price','P&L','P&L %', 'Total P&L', 'Total P&L %','low', 'sl', 'ltp', 'ltp %','tp', 'high', 'last_processed']]
-            
-        return df.to_dict('records'), [{"name": i, "id": i} for i in df.columns]
-    else:
-        return [],[{}]
-
-import time
 @dash_app.callback(
     [Output("live-start", "disabled"), Output("live-stop", "disabled")],
     [Input('live-start', 'n_clicks'), Input('live-stop', 'n_clicks')],
     [State('live-start', 'disabled'),State('live-stop', 'disabled')] )
 def toggle_trade(n1, n2, d1, d2):
-    live_cache = cache_state(cache_id)
-    return False, True
-
-    if n2 > 0 and d1 == True: #Trade is onoging
-        if live_cache.get('Kite_Status') == 'connected':
+    return True, True
+    if n2 > 0 and d1 == True: #Trade is onoging: Connected
+        if is_connected() == True:
             live_cache.publish('kite_ticker_handlerlive', 'CLOSE')
-        pinfo('Stop Trade')
-        
+            pinfo('Stopping Connection')
+        else:
+            pinfo("Connection is already closed")
         return False, True
-    elif n1 > 0 and d2 == True: # Trade is stopped
-        if live_cache.get('Kite_Status') != 'connected':
+    elif n1 > 0 and d2 == True: # Trade is stopped: Closed
+        if  is_connected() == False:
             live_cache.publish('kite_ticker_handlerlive', 'START')
-        pinfo('Start Trade')
+            live_cache.set('Kite_Status','connecting')
+            pinfo('Start Trade')
         return True, False
 
     return False, True

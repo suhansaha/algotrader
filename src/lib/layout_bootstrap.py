@@ -134,29 +134,29 @@ backtest_tab = dbc.Row([
 # Live Trade Tab
 #my_cache = cache_state(cache_type)
 live_cache = cache_state('live')
-df = live_cache.getValue()
-pinfo(df)
-try:
-    df = df[['stock', 'qty', 'TP %', 'SL %', 'algo', 'freq', 'mode', 'state',
-       'amount', 'price','P&L','P&L %', 'Total P&L', 'Total P&L %','low', 'sl', 'ltp', 'ltp %','tp', 'high', 'last_processed']]
-except:
-    pinfo('something went wrong with live table')
-    df = pd.DataFrame(columns=['stock', 'qty', 'TP %', 'SL %', 'algo', 'freq', 'mode', 'state',
+#df = live_cache.getValue()
+#pinfo(df)
+#try:
+#    df = df[['stock', 'qty', 'TP %', 'SL %', 'algo', 'freq', 'mode', 'state',
+#       'amount', 'price','P&L','P&L %', 'Total P&L', 'Total P&L %','low', 'sl', 'ltp', 'ltp %','tp', 'high', 'last_processed']]
+#except:
+#    pinfo('something went wrong with live table')
+df = pd.DataFrame(columns=['stock', 'qty', 'TP %', 'SL %', 'algo', 'freq', 'mode', 'state',
        'amount', 'price','P&L','P&L %', 'Total P&L', 'Total P&L %','low', 'sl', 'ltp', 'ltp %','tp', 'high', 'last_processed'])
 
-if df.shape[0] > 0:
-    trade_table = df_to_table(df, 'table-editing-simple', True, True)
-else:
-    trade_table = dash_table.DataTable(id='table-editing-simple', editable=True, row_deletable=True)
+#if df.shape[0] > 0:
+#    trade_table = df_to_table(df, 'table-editing-simple', True, True)
+#else:
+trade_table = dash_table.DataTable(id='table-editing-simple', editable=True, row_deletable=True)
 
 trade_tab = dbc.Row([
     dbc.Col( 
         [dbc.Row(dbc.Col(dcc.Dropdown(id='stock_picker_live', multi=True,  className='columns six', options=stock_options))),
          dbc.Row([dbc.Col( [
              #dbc.Button("Init", id="live-init",color="Primary", n_clicks = 0, disabled=False),
-                            dbc.Button("Start", id="live-start",color="success", n_clicks = 0, disabled=False),
+                            dbc.Button("Start", id="live-start",color="success", n_clicks = 0, disabled=True),
                             dbc.Button("Stop", id="live-stop",color="danger", disabled=True, n_clicks = 0),
-                            dcc.Interval( id='live-table-update', interval=1000, n_intervals=0, max_intervals=-1, disabled = False)
+                            dcc.Interval( id='live-table-update', interval=15000, n_intervals=0, max_intervals=-1, disabled = False)
                             ]),
                    ]),
          dbc.Row(dbc.Col(trade_table, style={'padding-left':'20px'}))

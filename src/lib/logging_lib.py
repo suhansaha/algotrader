@@ -15,8 +15,6 @@ logger.addHandler(c_handler)
 
 logfile = 'freedom.log'
 
-logger.debug(logfile)
-
 # File handlers
 f_handler = logging.FileHandler('log/'+logfile, mode='w')
 f_handler.setLevel(7)

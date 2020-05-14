@@ -261,6 +261,7 @@ def trade_init(stock_key, data):
     cache.setValue(stock_key, 'price', 0)
     cache.setValue(stock_key, 'hdf_freq', hdf_freq)
     cache.setValue(stock_key, 'mode', mode)
+    cache.setValue(stock_key, 'last_processed', 0)
 
     #cache.set(stock_key, pd.DataFrame().to_json(orient='columns')) #Used for plotting
     
@@ -484,6 +485,8 @@ def ohlc_tick_handler(manager, msg):
                     hdf_freq = cache.getValue(hash_key,'hdf_freq') # Needed to pull data
                     state = cache.getValue(hash_key,'state') # Initialize OHLC buffer
 
+                    cache.setValue(hash_key, 'ltp', ltp)
+
                     #pdebug('TH: {} =>{}'.format(hash_key, state))
                     if state == 'INIT': # State: Init: Load historical data from cache
                         # 1: Populate Redis buffer stock+"OHLCBuffer" with historical data
@@ -528,7 +531,7 @@ def ohlc_tick_handler(manager, msg):
                             #pinfo(last_processed)
                             cache.setValue(hash_key,'last_processed',curr_processed)
 
-                            pdebug('start trade job: {}=>{}'.format(stock_id, curr_processed))
+                            pdebug7('start trade job: {}=>{}'.format(stock_id, curr_processed))
                             trade_job_sem.acquire()
                             manager.add(stock_id, trade_job, False, hash_key)
                     else:
@@ -805,6 +808,8 @@ def kite_ticker_handler(manager, msg):
     # Initialise
     if kws is None and msg != 'INIT':
         return
+
+    pdebug('kite_ticker_handler: Exec {}'.format(msg))
 
     if msg == 'INIT':
         try:
