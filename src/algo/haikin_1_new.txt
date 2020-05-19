@@ -1,0 +1,2 @@
+sell = (REF(haOPEN, 0) > REF(haCLOSE,0)) & (REF(haOPEN, 1) < REF(haCLOSE,1))
+buy = (REF(haOPEN, 0) < REF(haCLOSE,0)) & (REF(haOPEN, 1) > REF(haCLOSE,1))

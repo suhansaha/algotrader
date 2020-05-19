@@ -5,6 +5,7 @@ from redis import Redis
 #logging.basicConfig(format='%(levelname)s:\t%(message)s', datefmt='%m-%d %H:%M:%S')
 logger = logging.getLogger('freedom')
 logger.setLevel(logging.DEBUG)
+#logger.setLevel(7)
 
 # Stream handlers
 c_handler = logging.StreamHandler()

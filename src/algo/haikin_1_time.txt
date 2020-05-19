@@ -1,0 +1,17 @@
+bbu, bbm, bbl = BBANDS(CLOSE)
+(min1, max1) = MINMAX(haOPEN, timeperiod = 5)
+roc = ROC(CLOSE, timeperiod=10)
+#pinfo(roc)
+if TIME < (9*60+25):
+    WAIT()
+elif state == 'SCANNING':
+    if (REF(roc, 0) < 0) and (REF(haOPEN, 1) <= REF(min1,1)) and (REF(haCLOSE,1) < REF(haOPEN,1)) and (REF(haCLOSE,0) > REF(haOPEN,0)): 
+        BUY()
+    elif (REF(roc, 0) > 0) and (REF(haOPEN, 0) >= REF(max1,0)) and (REF(haCLOSE,1) > REF(haOPEN,1)) and (REF(haCLOSE,0) < REF(haOPEN,0)): 
+        SELL()
+    
+else:
+    if (REF(roc, 0) < 0) and (REF(haCLOSE,2) < REF(haOPEN,2)) and (REF(haCLOSE,1) < REF(haOPEN,1)) and (REF(haCLOSE,0) > REF(haOPEN,0)): 
+        BUY()
+    elif (REF(roc, 0) > 0) and (REF(haCLOSE,2) > REF(haOPEN,2)) and (REF(haCLOSE,1) > REF(haOPEN,1)) and (REF(haCLOSE,0) < REF(haOPEN,0)): 
+        SELL()

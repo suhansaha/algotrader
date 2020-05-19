@@ -1,6 +1,7 @@
 from app import app
 #!/usr/bin/python
 from lib.multitasking_lib import *
+logger.setLevel(logging.INFO)
 
 pinfo("================================")
 pinfo("***   Starting New Session   ***")

@@ -219,7 +219,7 @@ def notification_despatcher(ws, msg, id='*', Tick=True ):
         # Push msg to msgBufferQueue
         #msg_id = cache.xadd('msgBufferQueue'+cache_postfix, msg, id=id)
         msg_id = cache.xadd('msgBufferQueue'+cache_postfix, {'data':json.dumps(msg)}, id=id)
-        #pinfo(msg_id)
+        #pinfo(msg)
     
     # Step 2.2: else
     else:
@@ -277,8 +277,11 @@ def full_simulation(data, ohlc_data, cache, exchange, manager):
     no = ohlc_data[stock].shape[0]
     counter = 0
     stream_id = lambda x,y:str(int(x.tz_localize(tz='Asia/Calcutta').timestamp()+y)*1000)+'-0'
+    cache.xtrim('msgBufferQueue'+cache_postfix, 0, True)
+    cache.xtrim('notificationQueue'+cache_postfix, 0, True)
     cache.delete('msgBufferQueue'+cache_postfix)
     cache.delete('notificationQueue'+cache_postfix)
+    cache.set('last_id_msg'+cache_postfix, 0)
     #pinfo(data['stock'])
     for i in np.linspace(0,no-1,no): # Push data
         if manager.abort == True:
@@ -368,14 +371,15 @@ def quick_backtest(data, ohlc_data, cache, exchange):
 
         trade_df1 = pd.DataFrame()
 
-        buy, sell = myalgo(cache, stock_key, pre_data, algo='', state='SCANNING', quick=True)
+        my_algo = cache.hget('algos',data['algo'])
+        buy, sell = myalgo(cache, stock_key, pre_data, algo=my_algo, state='SCANNING', quick=True)
 
         #pinfo(pre_data['close'])
         trade_df1 = SELL(pre_data['close'], sell, trade_df1)
         trade_df1 = BUY(pre_data['close'], buy, trade_df1)
 
         #pinfo(trade_df1.sort_index().tail(10))
-        cache.setCache(stock_key+cache_type+'Trade',trade_df1.sort_index())
+        cache.setCache(stock_key+cache_postfix+'Trade',trade_df1.sort_index())
     
     cache.set('done'+cache_postfix,1)
 
@@ -419,7 +423,7 @@ def ohlc_tick_handler(manager, msg):
 
         pdebug('ohlc_tick_handler({}) - INIT: {}'.format(cache_postfix, msg))
         last_id_msg = '0'
-        cache.set('last_id_msg', last_id_msg)
+        #last_id_msg = cache.get('last_id_msg'+cache_postfix)
         
         counter = 0
         while(True):
@@ -431,23 +435,27 @@ def ohlc_tick_handler(manager, msg):
                 ohlc_handler_sem.release()
                 break
 
-            pinfo(cache_postfix)
+            #pinfo(cache_postfix)
             # Step 1: Blocking call to msgBufferQueue and notificationQueue
-            if cache.xlen('msgBufferQueue'+cache_postfix) == 0:
-                cache.xread({'msgBufferQueue'+cache_postfix:'$'}, block=1, count=5000)
+            #pinfo(cache.xlen('msgBufferQueue'+cache_postfix))
+            #if cache.xlen('msgBufferQueue'+cache_postfix) == 0:
+            #    cache.xread({'msgBufferQueue'+cache_postfix:'$'}, block=0, count=5000)
 
-            #last_id_msg = cache.get('last_id_msg')
+            last_id_msg = cache.get('last_id_msg'+cache_postfix)
             #pinfo(cache.xlen('msgBufferQueue'+cache_postfix))
             
             msgs_q = cache.xread({'msgBufferQueue'+cache_postfix:last_id_msg}, block=2000, count=5000)
+
+            if len(msgs_q) == 0:
+                continue
             #cache.xtrim('msgBufferQueue'+cache_postfix,maxlen=0, approximate=False)
             
             try:
                 #last_id_msg = cache.get('last_id_msg')
                 last_id_msg = msgs_q[0][1][-1][0]
             except:
-                perror('Could not read data from msgBufferQueue')
-                break
+                perror('Could not read data from msgBufferQueue: {}'.format(msgs_q))
+                continue
             #pinfo(last_id_msg)
             
             # Step 3: Process tick: Start a worker thread for each msg       
@@ -456,9 +464,10 @@ def ohlc_tick_handler(manager, msg):
                 counter = counter + 1
                 val = json.loads(msg[1]['data'])
                 if val == 'done': # Backtest completed, exit gracefully
-                    perror("Processing done({}): {}: {}".format(cache_postfix, counter, msg))
-                    cache.set('done'+cache_postfix,1) #Trigger to UI thread TODO: Optimize
+                    pinfo("Processing done({}): {}: {}".format(cache_postfix, counter, msg))
+                    cache.set('done'+cache_postfix,1) #Trigger to UI thread
                     counter = 0
+                    cache.set('last_id_msg'+cache_postfix, msg[0])
                     ohlc_handler_sem.release()
 
                     #cache.set('last_id_msg', msg[0])
@@ -514,7 +523,7 @@ def ohlc_tick_handler(manager, msg):
                     except:
                         pwarning('Can not push tick data: {}:{}'.format(stock_id, temp_df))
 
-                    cache.set('last_id_msg', msg[0])
+                    cache.set('last_id_msg'+cache_postfix, msg[0])
                     ########## Should I start Trade Job? ###########################
                     
                     mode = cache.getValue(stock_id,'mode') #don't start if mode is paused
@@ -538,20 +547,19 @@ def ohlc_tick_handler(manager, msg):
                         pdebug1('Algotrade Paused for {}:[abort:{}, pause:{}, mode:{}]'.format(stock_id, manager.abort, manager.pause, mode))
                     
                 ohlc_handler_sem.release()
-    
-    #ohlc_tick_handler_lock.release()
 
 def trade_job(manager, hash_key):
     if manager.abort == True or manager.pause == True:
         return
 
     pdebug7('trade_job: {}'.format(hash_key))
-    
-    if cache.getValue('WIPRO').empty:
-        perror('Exiting tradejob as there is no cache')
-        return
 
     stock = cache.getValue(hash_key,'stock')
+
+        
+    if cache.getValue(stock).empty:
+        perror('Exiting tradejob as there is no cache')
+        return
 
     try:
         trade_lock = trade_lock_store[stock]
@@ -586,7 +594,7 @@ def trade_job(manager, hash_key):
         cache.setValue(hash_key, 'high', high)
         
         time_val = ohlc_df.index[-1].minute+ohlc_df.index[-1].hour*60
-        cutoff_time = (16*60+15)
+        cutoff_time = (15*60+5)
         last_processed = ohlc_df.index[-1].strftime('%Y-%m-%d %H:%M')
 
         # Step 2: Switch to appropriate state machine based on current state
@@ -629,13 +637,13 @@ def trade_job(manager, hash_key):
             # 1: If notification for AutoSquare Off: set state to init
             if time_val >= cutoff_time:
                 placeorder("S: EX: ", ohlc_df, stock, last_processed)
-                cache.setValue(hash_key,'state','SQUAREOFF')
+                cache.setValue(hash_key,'state','SCANNING')
             elif ltp < sl:
                 placeorder("S: SL: ", ohlc_df, stock, last_processed)
-                cache.setValue(hash_key,'state','SQUAREOFF')
+                cache.setValue(hash_key,'state','SCANNING')
             elif ltp > tp:
                 placeorder("S: TP: ", ohlc_df, stock, last_processed)
-                cache.setValue(hash_key,'state','SQUAREOFF')
+                cache.setValue(hash_key,'state','SCANNING')
                 pass
             else:
                 # 2: Else run trading algorithm for square off
@@ -645,20 +653,20 @@ def trade_job(manager, hash_key):
                     #logtrade("SO-S: {} : {} -> {}".format(last_processed, stock, ohlc_get(ohlc_df,'close')))
 
                     # 3: If algo returns square off: then push square off details to OrderQueue, set state to 'Awaiting Square Off'   
-                    cache.setValue(hash_key,'state','SQUAREOFF')
+                    cache.setValue(hash_key,'state','SCANNING')
         
         
         elif state == 'SHORT': # State: Short
             # 1: If notification for AutoSquare Off: set state to init
             if time_val >= cutoff_time:
                 placeorder("B: EX: ", ohlc_df, stock, last_processed)
-                cache.setValue(hash_key,'state','SQUAREOFF')
+                cache.setValue(hash_key,'state','SCANNING')
             elif ltp > sl:
                 placeorder("B: SL: ", ohlc_df, stock, last_processed)
-                cache.setValue(hash_key,'state','SQUAREOFF')
+                cache.setValue(hash_key,'state','SCANNING')
             elif ltp < tp:
                 placeorder("B: TP: ", ohlc_df, stock, last_processed)
-                cache.setValue(hash_key,'state','SQUAREOFF')
+                cache.setValue(hash_key,'state','SCANNING')
             else:
                 # 2: Else run trading algorithm for square off
                 tradeDecision = myalgo(cache, hash_key, ohlc_df, algo, state)
@@ -668,7 +676,7 @@ def trade_job(manager, hash_key):
                 
                     # 3: If algo returns square off: then push square off details to OrderQueue, set state to 'Awaiting Square Off'
             
-                    cache.setValue(hash_key,'state','SQUAREOFF')
+                    cache.setValue(hash_key,'state','SCANNING')
             
         elif state == 'SQUAREOFF':  # State: Awaiting Square Off
             # 1: On Fill notification: set state to SCANNING
@@ -867,9 +875,17 @@ def kite_ticker_handler(manager, msg):
 ### Kite CallBack functions                     ###
 ###################################################
 
+ticker_count = 0
 def on_ticks(ws, ticks):
+  global ticker_count
   # Callback to receive ticks.
-  pdebug("Ticks: {}".format(ticks))
+  ticker_count = ticker_count + 1
+
+  if ticker_count % 1000 == 0:
+    pdebug("Ticks: {}".format(ticks))
+  
+  cache = cache_state(cache_id)
+  cache.set('tick_count', ticker_count)
   #for tick in ticks:
   notification_despatcher(ws, ticks)
 

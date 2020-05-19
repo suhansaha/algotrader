@@ -72,6 +72,11 @@ def myalgo(cache, key, ohlc_data_df, algo=None, state='SCANNING', quick=False):
     SELL = lambda qty=-1, sl=-1, tp=-1, x2 = -1:order_details(cache, key, 'SELL', x2, qty, sl, tp)
     WAIT = lambda : order_details(cache, key, 'WAIT')
     def update_decision(buy, sell):
+        #pinfo(buy.index)
+        cache.set('buy_df',buy.to_json(orient='index'))
+        cache.set('sell_df',sell.to_json(orient='index'))
+        #buy1 = buy.copy(deep=True)
+        #sell1 = sell.copy(deep=True)
         try:
             if buy[-1] == True:
                 BUY()
@@ -106,4 +111,7 @@ def myalgo(cache, key, ohlc_data_df, algo=None, state='SCANNING', quick=False):
         #pinfo(decision)
         return decision #"BUY"|"SELL"
     else:
-        return buy, sell
+        buy = pd.read_json(cache.get('buy_df'), orient='index')
+        sell = pd.read_json(cache.get('sell_df'), orient='index')
+        #pinfo(buy)
+        return buy[0].values, sell[0].values

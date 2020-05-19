@@ -21,7 +21,7 @@ backtest_cache.set('done'+cache_type,1)
 
 def store_algo(algo, algo_name="default"):
     live_cache.hset("algos",algo_name, algo)
-    algo_f = open("log/"+algo_name+".txt", "w")
+    algo_f = open("algo/"+algo_name+".txt", "w")
     algo_f.write(algo)
     algo_f.close()
 
@@ -217,10 +217,10 @@ def get_live_table(df):
     [Output('table-editing-simple', 'data'),
     Output('table-editing-simple', 'columns')
     ],
-    [Input('stock_picker_live', 'value'), Input('table-editing-simple', 'data_timestamp') , Input('live-table-update', 'n_intervals')],
+    [Input('stock_picker_live', 'value'), Input('table-editing-simple', 'data_timestamp') ],
     [State('table-editing-simple', 'data'),
      State('table-editing-simple', 'columns')])  
-def add_row(values, ts, n_intervals, rows, columns):
+def add_row(values, ts, rows, columns):
     df_table_new = pd.DataFrame.from_dict(rows)
     df_cache = live_cache.getValue()
     cache_keys =  live_cache.getKeys()
@@ -261,7 +261,7 @@ def add_row(values, ts, n_intervals, rows, columns):
                 pass
 
     for index, row in  df_table_new.iterrows():  
-            pinfo("Updated stock: {}".format(row['stock']))
+            #pinfo("Updated stock: {}".format(row['stock']))
             live_cache.setValue(row['stock'], 'qty', row['qty'])
             live_cache.setValue(row['stock'], 'TP %', row['TP %'])
             live_cache.setValue(row['stock'], 'SL %', row['SL %'])
@@ -271,21 +271,50 @@ def add_row(values, ts, n_intervals, rows, columns):
             # TODO: If mode == Pause, continue getting ticks, only pause tradejob. Live/Paper Trade in Order Placement
 
             
-            state = row['state']
-            prev_state = live_cache.getValue(row['stock'], 'state')
-            if state != prev_state:
-                order_id = live_cache.getValue(row['stock'], 'order_id')
+            #state = row['state']
+            #prev_state = live_cache.getValue(row['stock'], 'state')
+            #if state != prev_state:
+            #    order_id = live_cache.getValue(row['stock'], 'order_id')
                 #TODO: User initiated Buy/Sell, Cancel
-            live_cache.setValue(row['stock'], 'state', row['state'])
+            #live_cache.setValue(row['stock'], 'state', row['state'])
  
     return get_live_table(live_cache.getValue())
+
+
+@dash_app.callback(
+    [ Output('table-editing-monitor', 'data'),
+    Output('table-editing-monitor', 'columns')
+    ],
+    [Input('live-table-update', 'n_intervals')])  
+def refresh_trade_monitor(n_intervals):
+    return get_live_table(live_cache.getValue())
+
+
+@dash_app.callback(
+    Output('live-status', 'children'),
+    [Input('live-table-update', 'n_intervals')])  
+def refresh_live_status(n_intervals):
+    status = 'Ticker Status:' + live_cache.get('Kite_Status') + ' | Total Ticks: ' +  live_cache.get('tick_count')
+
+    val = live_cache.get('last_id_msglive')
+    dateval = datetime.fromtimestamp(int(val.split('-')[0] )/1000).strftime('%d-%m-%y %H:%M:%S')
+
+    status = status + ' | last_id_msg: ' + dateval
+
+    try:
+        peek_msg_queue = live_cache.xrange('msgBufferQueuelive')[-1]
+        dateval = datetime.fromtimestamp(int(peek_msg_queue[0].split('-')[0] )/1000).strftime('%d-%m-%y %H:%M:%S')
+        status = status + ' | last MsgQueue: ' + dateval
+    except:
+        pass
+
+    return status
 
 @dash_app.callback(
     [Output("live-start", "disabled"), Output("live-stop", "disabled")],
     [Input('live-start', 'n_clicks'), Input('live-stop', 'n_clicks')],
     [State('live-start', 'disabled'),State('live-stop', 'disabled')] )
 def toggle_trade(n1, n2, d1, d2):
-    return True, True
     if n2 > 0 and d1 == True: #Trade is onoging: Connected
         if is_connected() == True:
             live_cache.publish('kite_ticker_handlerlive', 'CLOSE')
@@ -301,6 +330,18 @@ def toggle_trade(n1, n2, d1, d2):
         return True, False
 
     return False, True
+
+@dash_app.callback(
+    [Output("order-pause", "children"),Output("order-pause", "color")],
+    [Input('order-pause', 'n_clicks')],
+    [State('order-pause', 'children')] )
+def toggle_trade(n1, v):
+    pinfo(v)
+    if v == 'Order Pause':
+        live_cache.publish('order_handlerlive', 'pause')
+        return 'Order Resume', "success"
+    live_cache.publish('order_handlerlive', 'resume')
+    return 'Order Pause', "danger"
 
 #@dash_app.callback(
 #    Output("live-stop", "active"),
