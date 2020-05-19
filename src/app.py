@@ -268,6 +268,7 @@ def add_row(values, ts, rows, columns):
             live_cache.setValue(row['stock'], 'algo', row['algo'])
             live_cache.setValue(row['stock'], 'freq', row['freq'])
             live_cache.setValue(row['stock'], 'mode', row['mode'])
+            live_cache.setValue(row['stock'], 'state', row['state'])
             # TODO: If mode == Pause, continue getting ticks, only pause tradejob. Live/Paper Trade in Order Placement
 
             

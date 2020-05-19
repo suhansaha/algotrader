@@ -415,6 +415,60 @@ def kite_simulator(manager, msg):
         pinfo('Running Full Backtest')
         full_simulation(data, ohlc_data, cache, exchange, manager)
     
+def order_notification_handler(manager, msg):
+    pdebug('order_notification_handler({}) - INIT: {}'.format(cache_postfix, msg))
+    last_msg_id = '0'
+
+    while(True):
+        if manager.abort == True:
+            break
+        msgs_q = cache.xread({'notificationQueuelivenew':last_msg_id}, block=2000, count=5000)
+        cache.xtrim('notificationQueuelivenew', maxlen=0, approximate=False)
+
+        if len(msgs_q) == 0:
+            continue
+        #cache.xtrim('msgBufferQueue'+cache_postfix,maxlen=0, approximate=False)
+        
+        try:
+            #last_id_msg = cache.get('last_id_msg')
+            last_id_msg = msgs_q[0][1][-1][0]
+        except:
+            perror('Could not read data from msgBufferQueue: {}'.format(msgs_q))
+            continue
+
+        for msg in msgs_q[0][1]:
+            #last_msg_id = msg[0]
+            #print(msg[1]['data'])
+            data = json.loads(msg[1]['data'])
+            order_id = data['order_id']
+            status = data['status']
+            symbol = data['tradingsymbol']
+            price = data['average_price']
+            state = cache.getValue(symbol,'state')
+            cache_order_id = cache.getValue(symbol,'order_id')
+            if cache_order_id != order_id:
+                continue
+
+            if status == 'COMPLETE':
+                if state == 'PO:LONG':
+                    cache.setValue(symbol,'state','LONG')
+                elif state == 'PO:SHORT':
+                    cache.setValue(symbol,'state','SHORT')
+                elif state == 'SQUAREOFF:LONG' or state == 'SQUAREOFF:SHORT' :
+                    cache.setValue(symbol,'state','SCANNING')
+
+                cache.setValue(symbol, 'price', price)
+
+            elif status == 'REJECTED' or  status == 'CANCELLED' :
+                if state == 'PO:LONG' or state == 'PO:SHORT':
+                    cache.setValue(symbol,'state','SCANNING')
+                elif state == 'SQUAREOFF:LONG':
+                    cache.setValue(symbol,'state','LONG')
+                elif state == 'SQUAREOFF:SHORT':
+                    cache.setValue(symbol,'state','SHORT')
+            #elif status == 'OPEN':
+            print("{}: {} - {} : {} => {}".format(symbol, order_id, status, state, cache.getValue(symbol,'state')))
+
 
 trade_job_sem = Semaphore(10)
 ohlc_tick_handler_lock = Lock()
@@ -609,78 +663,80 @@ def trade_job(manager, hash_key):
                 pass
             # 2: If Algo returns Buy: set State to 'Pending Order: Long'
             elif tradeDecision=="BUY":
+                cache.setValue(hash_key,'state','PO:LONG')
                 placeorder("B: EN: ", ohlc_df, stock, last_processed)
-                #logtrade("BUY : {} : {} -> {}".format(last_processed, stock, ohlc_get(ohlc_df,'close')))
-                cache.setValue(hash_key,'state','LONG') #TODO
             
             # 3: If Algo returns Sell: set State to 'Pending Order: Short'
             elif tradeDecision=="SELL":
+                cache.setValue(hash_key,'state','PO:SHORT')
                 placeorder("S: EN: ", ohlc_df, stock, last_processed)
-                #logtrade("SELL: {} : {} -> {}".format(last_processed, stock, ohlc_get(ohlc_df,'close')))
-                cache.setValue(hash_key,'state','SHORT') #TODO
             
             # 4: Update TradeMetaData: Push order details to OrderQueue
         
         elif state == 'PO:LONG': # State: Pending Order: Long
         
             # 1: On Fill: set State to Long
-            cache.setValue(hash_key,'state','LONG')
+            #cache.setValue(hash_key,'state','LONG')
+            pass
         
         
         elif state == 'PO:SHORT': # State: Pending Order: Short
         
             # 1: On Fill: set State to Short
-            cache.setValue(hash_key,'state','SHORT')
+            #cache.setValue(hash_key,'state','SHORT')
+            pass
         
         
         elif state == 'LONG': # State: Long
             # 1: If notification for AutoSquare Off: set state to init
             if time_val >= cutoff_time:
+                cache.setValue(hash_key,'state','SQUAREOFF:LONG')
                 placeorder("S: EX: ", ohlc_df, stock, last_processed)
-                cache.setValue(hash_key,'state','SCANNING')
             elif ltp < sl:
+                cache.setValue(hash_key,'state','SQUAREOFF:LONG')
                 placeorder("S: SL: ", ohlc_df, stock, last_processed)
-                cache.setValue(hash_key,'state','SCANNING')
             elif ltp > tp:
+                cache.setValue(hash_key,'state','SQUAREOFF:LONG')
                 placeorder("S: TP: ", ohlc_df, stock, last_processed)
-                cache.setValue(hash_key,'state','SCANNING')
                 pass
             else:
                 # 2: Else run trading algorithm for square off
                 tradeDecision = myalgo(cache, hash_key, ohlc_df, algo, state)
                 if tradeDecision == "SELL":
+                    cache.setValue(hash_key,'state','SQUAREOFF:LONG')
                     placeorder("S: EX: ", ohlc_df, stock, last_processed)
-                    #logtrade("SO-S: {} : {} -> {}".format(last_processed, stock, ohlc_get(ohlc_df,'close')))
 
                     # 3: If algo returns square off: then push square off details to OrderQueue, set state to 'Awaiting Square Off'   
-                    cache.setValue(hash_key,'state','SCANNING')
         
         
         elif state == 'SHORT': # State: Short
             # 1: If notification for AutoSquare Off: set state to init
             if time_val >= cutoff_time:
+                cache.setValue(hash_key,'state','SQUAREOFF:SHORT')
                 placeorder("B: EX: ", ohlc_df, stock, last_processed)
-                cache.setValue(hash_key,'state','SCANNING')
             elif ltp > sl:
+                cache.setValue(hash_key,'state','SQUAREOFF:SHORT')
                 placeorder("B: SL: ", ohlc_df, stock, last_processed)
-                cache.setValue(hash_key,'state','SCANNING')
             elif ltp < tp:
+                cache.setValue(hash_key,'state','SQUAREOFF:SHORT')
                 placeorder("B: TP: ", ohlc_df, stock, last_processed)
-                cache.setValue(hash_key,'state','SCANNING')
             else:
                 # 2: Else run trading algorithm for square off
                 tradeDecision = myalgo(cache, hash_key, ohlc_df, algo, state)
                 if tradeDecision == "BUY":
+                    cache.setValue(hash_key,'state','SQUAREOFF:SHORT')
                     placeorder("B: EX: ", ohlc_df, stock, last_processed)
-                    #logtrade("SO-B: {} : {} -> {}".format(last_processed, stock, ohlc_get(ohlc_df,'close')))
                 
                     # 3: If algo returns square off: then push square off details to OrderQueue, set state to 'Awaiting Square Off'
             
-                    cache.setValue(hash_key,'state','SCANNING')
-            
-        elif state == 'SQUAREOFF':  # State: Awaiting Square Off
+        elif state == 'SQUAREOFF:LONG':  # State: Awaiting Square Off
             # 1: On Fill notification: set state to SCANNING
-            cache.setValue(hash_key,'state','SCANNING')
+            #cache.setValue(hash_key,'state','SCANNING')
+            pass
+        elif state == 'SQUAREOFF:SHORT':  # State: Awaiting Square Off
+            # 1: On Fill notification: set state to SCANNING
+            #cache.setValue(hash_key,'state','SCANNING')
+            pass
     except:
         perror('Issue in algotrade')
     finally:
@@ -764,6 +820,12 @@ def order_handler(manager, msg):
     #pinfo(manager.pause)
     if manager.pause == True:
         pwarning('Order Handler Paused: Can not place order now: {}'.format(msg))
+        if state == 'PO:LONG':
+            cache.setValue(symbol, 'state','LONG')
+        elif state == 'PO:SHORT':
+            cache.setValue(symbol, 'state','SHORT')
+        else:
+            cache.setValue(symbol, 'state','SCANNING') 
         return
    
     try:
@@ -778,6 +840,14 @@ def order_handler(manager, msg):
             if mode == 'live':
                 order_id = buy_limit(kite, symbol, price, quantity)
                 cache.setValue(symbol,'order_id', order_id)
+            else:
+                state = cache.getValue(symbol, 'state')
+                pinfo(state)
+                if state == 'PO:LONG':
+                    cache.setValue(symbol, 'state','LONG')
+                else:
+                    cache.setValue(symbol, 'state','SCANNING')                    
+
         elif cmd == 'sell':
             symbol = msg_j['symbol']
             price = float(msg_j['price'])
@@ -788,6 +858,14 @@ def order_handler(manager, msg):
             if mode == 'live':
                 order_id = sell_limit(kite, symbol, price, quantity)
                 cache.setValue(symbol,'order_id', order_id)
+            else:
+                state = cache.getValue(symbol, 'state')
+                pinfo(state)
+                if state == 'PO:SHORT':
+                    cache.setValue(symbol, 'state','SHORT')
+                else:
+                    cache.setValue(symbol, 'state','SCANNING')
+
         elif cmd == 'cancel':
             mode = cache.getValue(symbol, 'mode')
             pinfo('Cancel Order({})'.format(mode))

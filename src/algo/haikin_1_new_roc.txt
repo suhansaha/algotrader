@@ -1,4 +1,4 @@
 roc = ROC(CLOSE, timeperiod=10)
-pinfo(roc)
-sell = (REF(roc,0) > 0.05) & (REF(haOPEN, 0) > REF(haCLOSE,0)) & (REF(haOPEN, 1) < REF(haCLOSE,1))
-buy = (REF(roc,0) < -0.05) & (REF(haOPEN, 0) < REF(haCLOSE,0)) & (REF(haOPEN, 1) > REF(haCLOSE,1))
+#pinfo(roc)
+sell = (REF(roc,0) > 0.1) & (REF(haOPEN, 0) > REF(haCLOSE,0)) & (REF(haOPEN, 1) < REF(haCLOSE,1))
+buy = (REF(roc,0) < -0.1) & (REF(haOPEN, 0) < REF(haCLOSE,0)) & (REF(haOPEN, 1) > REF(haCLOSE,1))

@@ -17,7 +17,7 @@ logger.addHandler(c_handler)
 logfile = 'freedom.log'
 
 # File handlers
-f_handler = logging.FileHandler('log/'+logfile, mode='w')
+f_handler = logging.FileHandler('log/'+logfile, mode='r+')
 f_handler.setLevel(7)
 #f_format = logging.Formatter('%(levelname)s - %(message)s')
 f_handler.setFormatter(c_format)

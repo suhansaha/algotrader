@@ -7,4 +7,4 @@ redis_conn.hmset('eq_token',eq_nse.set_index('tradingsymbol').transpose().to_dic
 redis_conn.set('last_id_msg'+cache_id,0)
 
 if __name__ == "__main__":
-    live_manager = threadManager(cache_id, ["ohlc_tick_handler"], [ohlc_tick_handler])
+    live_manager = threadManager(cache_id, ["ohlc_tick_handler","order_notification_handler"], [ohlc_tick_handler, order_notification_handler])
