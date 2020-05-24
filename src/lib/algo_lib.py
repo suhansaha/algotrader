@@ -59,7 +59,7 @@ def myalgo(cache, key, ohlc_data_df, algo=None, state='SCANNING', quick=False):
     
     (haOPEN, haHIGH, haLOW, haCLOSE) = HAIKINASI(ohlc_data_temp)
  
-    TIME = ohlc_data_temp.index[-1].minute+ohlc_data_temp.index[-1].hour*60
+    TIME = ohlc_data_temp.index.minute+ohlc_data_temp.index.hour*60
     
     REF = lambda df, i: df.shift(i)
     TREND_UP = lambda : ROC(CLOSE, 10) >= 0.1

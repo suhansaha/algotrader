@@ -204,12 +204,15 @@ def console_cmd(n_clicks, n_submit, cmd ):
 is_connected = lambda : True if live_cache.get('Kite_Status') == 'connected' or live_cache.get('Kite_Status') == 'connecting' else False 
 import time
 
-def get_live_table(df):
+def get_live_table(df, tab='monitor'):
     if df.shape[0] > 0:
-        df = df[['stock', 'qty', 'TP %', 'SL %', 'algo', 'freq', 'mode', 'state', 'ltp','last_processed',
-       'amount', 'price','P&L','P&L %', 'Total P&L', 'Total P&L %','low', 'sl',  'ltp %','tp', 'high']]
+        if tab == 'monitor':
+            df = df[['stock', 'qty', 'TP %', 'SL %', 'algo', 'freq', 'mode', 'state', 'ltp','last_processed',
+        'amount', 'price','P&L','P&L %', 'Total P&L', 'Total P&L %','low', 'sl',  'ltp %','tp', 'high']]
+        else:
+            df = df[['stock', 'qty', 'TP %', 'SL %', 'algo', 'freq', 'mode', 'state']]
             
-        return df.to_dict('records'), [{"name": i, "id": i} for i in df.columns]
+        return df.to_dict('records'), [{"name": 'ss'+i, "id": i} for i in df.columns]
     else:
         return [],[{}]
 
@@ -245,7 +248,7 @@ def add_row(values, ts, rows, columns):
                 stock_list = list(map(int,live_cache.smembers('ticker_list')))
 
                 live_cache.publish('kite_ticker_handlerlive', json.dumps({'cmd':'add','value':stock_list,'mode':'ltp'}))
-                return get_live_table(live_cache.getValue())
+                return get_live_table(live_cache.getValue(), 'setup')
 
     #TODO: Removal of last stock
     if df_cache.shape[0] > df_table_new.shape[0]: # Removal of stock
@@ -279,7 +282,7 @@ def add_row(values, ts, rows, columns):
                 #TODO: User initiated Buy/Sell, Cancel
             #live_cache.setValue(row['stock'], 'state', row['state'])
  
-    return get_live_table(live_cache.getValue())
+    return get_live_table(live_cache.getValue(), 'setup')
 
 
 @dash_app.callback(
@@ -289,6 +292,19 @@ def add_row(values, ts, rows, columns):
     [Input('live-table-update', 'n_intervals')])  
 def refresh_trade_monitor(n_intervals):
     return get_live_table(live_cache.getValue())
+
+
+@dash_app.callback(
+    Output('reset-live', 'value'),
+    [Input('reset-live', 'n_clicks')])  
+def resete_live_cache(n_clicks):
+
+    if n_clicks > 0:
+        for stock in live_cache.getKeys():
+            live_cache.add(stock, True)
+    
+    live_cache.publish('order_handlerlive',json.dumps({'cmd':'cancelAll'}))
+    return 'Reset'
 
 
 @dash_app.callback(
@@ -338,6 +354,8 @@ def toggle_trade(n1, n2, d1, d2):
     [State('order-pause', 'children')] )
 def toggle_trade(n1, v):
     pinfo(v)
+    if n1 == 0:
+        return 'Order Pause', "danger"
     if v == 'Order Pause':
         live_cache.publish('order_handlerlive', 'pause')
         return 'Order Resume', "success"

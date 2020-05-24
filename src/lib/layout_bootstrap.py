@@ -131,7 +131,10 @@ backtest_tab = dbc.Row([
 
 
 df = pd.DataFrame(columns=['stock', 'qty', 'TP %', 'SL %', 'algo', 'freq', 'mode', 'state',
-       'amount', 'price','P&L','P&L %', 'Total P&L', 'Total P&L %','low', 'sl', 'ltp', 'ltp %','tp', 'high', 'last_processed'])
+       'amount', 'price','P&L','P&L %', 'Total P&L', 'Total P&L %','low', 'sl', 'ltp', 'ltp %','tp', 'high', 'last_processed','order_id'])
+
+
+df_setup = pd.DataFrame(columns=['stock', 'qty', 'TP %', 'SL %', 'algo', 'freq', 'mode', 'state'])
 
 trade_table = dash_table.DataTable(id='table-editing-simple', editable=True, row_deletable=True)
 

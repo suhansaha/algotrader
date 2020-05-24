@@ -423,7 +423,7 @@ def order_notification_handler(manager, msg):
         if manager.abort == True:
             break
         msgs_q = cache.xread({'notificationQueuelivenew':last_msg_id}, block=2000, count=5000)
-        cache.xtrim('notificationQueuelivenew', maxlen=0, approximate=False)
+        #cache.xtrim('notificationQueuelivenew', maxlen=0, approximate=False)
 
         if len(msgs_q) == 0:
             continue
@@ -431,7 +431,7 @@ def order_notification_handler(manager, msg):
         
         try:
             #last_id_msg = cache.get('last_id_msg')
-            last_id_msg = msgs_q[0][1][-1][0]
+            last_msg_id = msgs_q[0][1][-1][0]
         except:
             perror('Could not read data from msgBufferQueue: {}'.format(msgs_q))
             continue
@@ -818,55 +818,12 @@ def order_handler(manager, msg):
     kite.set_access_token(access_token)
 
     #pinfo(manager.pause)
-    if manager.pause == True:
-        pwarning('Order Handler Paused: Can not place order now: {}'.format(msg))
-        if state == 'PO:LONG':
-            cache.setValue(symbol, 'state','LONG')
-        elif state == 'PO:SHORT':
-            cache.setValue(symbol, 'state','SHORT')
-        else:
-            cache.setValue(symbol, 'state','SCANNING') 
-        return
    
     try:
         msg_j = json.loads(msg)
         cmd = msg_j['cmd']
-        if cmd == 'buy':
-            symbol = msg_j['symbol']
-            price = float(msg_j['price'])
-            quantity = int(msg_j['qty'])
-            mode = cache.getValue(symbol, 'mode')
-            pinfo('Placeorder({}):{}: {}: {}x{}'.format(mode, cmd, symbol, quantity, price))
-            if mode == 'live':
-                order_id = buy_limit(kite, symbol, price, quantity)
-                cache.setValue(symbol,'order_id', order_id)
-            else:
-                state = cache.getValue(symbol, 'state')
-                pinfo(state)
-                if state == 'PO:LONG':
-                    cache.setValue(symbol, 'state','LONG')
-                else:
-                    cache.setValue(symbol, 'state','SCANNING')                    
 
-        elif cmd == 'sell':
-            symbol = msg_j['symbol']
-            price = float(msg_j['price'])
-            quantity = int(msg_j['qty'])
-            mode = cache.getValue(symbol, 'mode')
-            pinfo('Placeorder({}):{}: {}: {}x{}'.format(mode, cmd, symbol, quantity, price))
-
-            if mode == 'live':
-                order_id = sell_limit(kite, symbol, price, quantity)
-                cache.setValue(symbol,'order_id', order_id)
-            else:
-                state = cache.getValue(symbol, 'state')
-                pinfo(state)
-                if state == 'PO:SHORT':
-                    cache.setValue(symbol, 'state','SHORT')
-                else:
-                    cache.setValue(symbol, 'state','SCANNING')
-
-        elif cmd == 'cancel':
+        if cmd == 'cancel':
             mode = cache.getValue(symbol, 'mode')
             pinfo('Cancel Order({})'.format(mode))
 
@@ -878,6 +835,49 @@ def order_handler(manager, msg):
             cancel_all(kite)
         elif cmd == 'getOrder':
             pinfo(getOrders(kite))
+
+        else:
+            if manager.pause == True:
+                pwarning('Order Handler Paused: Can not place order now: {}'.format(msg))
+            if state == 'PO:LONG':
+                cache.setValue(symbol, 'state','LONG')
+            elif state == 'PO:SHORT':
+                cache.setValue(symbol, 'state','SHORT')
+            else:
+                cache.setValue(symbol, 'state','SCANNING') 
+            return
+
+            symbol = msg_j['symbol']
+            price = float(msg_j['price'])
+            quantity = int(msg_j['qty'])
+            mode = cache.getValue(symbol, 'mode')
+            pinfo('Placeorder({}):{}: {}: {}x{}'.format(mode, cmd, symbol, quantity, price))
+
+            if cmd == 'buy':
+                if mode == 'live':
+                    order_id = buy_limit(kite, symbol, price, quantity)
+                    cache.setValue(symbol,'order_id', order_id)
+                else:
+                    state = cache.getValue(symbol, 'state')
+                    pinfo(state)
+                    if state == 'PO:LONG':
+                        cache.setValue(symbol, 'state','LONG')
+                    else:
+                        cache.setValue(symbol, 'state','SCANNING')                    
+
+            elif cmd == 'sell':
+                if mode == 'live':
+                    order_id = sell_limit(kite, symbol, price, quantity)
+                    cache.setValue(symbol,'order_id', order_id)
+                else:
+                    state = cache.getValue(symbol, 'state')
+                    pinfo(state)
+                    if state == 'PO:SHORT':
+                        cache.setValue(symbol, 'state','SHORT')
+                    else:
+                        cache.setValue(symbol, 'state','SCANNING')
+
+        
     except:
         perror('Error in order handler')
         pass
@@ -976,7 +976,7 @@ def on_connect(ws, response):
     pinfo(value)
     if len(value) > 0:
         ws.subscribe(value)
-        ws.set_mode(ws.MODE_LTP, value)
+        ws.set_mode(ws.MODE_QUOTE, value)
 
     #ws.cache = cache_state(cache_id)
     cache.set('Kite_Status','connected')

@@ -5,3 +5,5 @@ src/data/*.h5
 src/lib/__pycache__/*
 src/log/*
 src/app_example.py
+ssl/*
+freedom_aws_key.pem
