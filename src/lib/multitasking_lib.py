@@ -837,6 +837,13 @@ def order_handler(manager, msg):
             pinfo(getOrders(kite))
 
         else:
+
+            symbol = msg_j['symbol']
+            price = float(msg_j['price'])
+            quantity = int(msg_j['qty'])
+            mode = cache.getValue(symbol, 'mode')
+            state = cache.getValue(symbol, 'state')
+
             if manager.pause == True:
                 pwarning('Order Handler Paused: Can not place order now: {}'.format(msg))
             if state == 'PO:LONG':
@@ -847,10 +854,6 @@ def order_handler(manager, msg):
                 cache.setValue(symbol, 'state','SCANNING') 
             return
 
-            symbol = msg_j['symbol']
-            price = float(msg_j['price'])
-            quantity = int(msg_j['qty'])
-            mode = cache.getValue(symbol, 'mode')
             pinfo('Placeorder({}):{}: {}: {}x{}'.format(mode, cmd, symbol, quantity, price))
 
             if cmd == 'buy':
