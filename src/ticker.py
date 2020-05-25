@@ -5,7 +5,7 @@ if __name__ == "__main__":
     live_cache = cache_state(cache_id)
 
     live_cache.set('Kite_Status','closed')
-    #live_cache.xtrim('msgBufferQueue'+cache_id,0,False)
+    live_cache.xtrim('msgBufferQueue'+cache_id,0,False)
     
     while True:
         if live_cache.get('Kite_Status') == 'connected':

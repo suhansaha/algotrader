@@ -11,3 +11,4 @@ www/.well-known/pki-validation/
 www/.well-known/pki-validation/*
 www
 www/*
+src/lib/user_pass.py

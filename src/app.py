@@ -1,19 +1,30 @@
 import pandas as pd
 from lib.layout_bootstrap import *
-from flask import Flask, render_template, request
+from flask import Flask, render_template, request, jsonify, session
 from collections import deque
 from lib.logging_lib import pdebug, pdebug1, pdebug5, perror, pinfo, redis_conn, cache_type, cache_id, logger
 from lib.charting_lib import *
 from lib.multitasking_lib import trade_analysis_raw
 import json
 import os
+from datetime import date, datetime
+from decimal import Decimal
+from kiteconnect import KiteConnect
+import dash_auth
+
+from lib.user_pass import *
 
 app = Flask(__name__)
 app.secret_key = os.urandom(24)
 
 dash_app = dash.Dash(__name__, server=app, external_stylesheets=external_stylesheets)
-dash_app.layout = layout_bootstrap
 
+auth = dash_auth.BasicAuth(
+    dash_app,
+    VALID_USERNAME_PASSWORD_PAIRS
+)
+
+dash_app.layout = layout_bootstrap
 
 backtest_cache = cache_state(cache_type)
 live_cache = cache_state(cache_id)
@@ -38,6 +49,12 @@ def store_algo(algo, algo_name="default"):
 def start_backtest(n_clicks, stocks, qty, sl, target, start_date, end_date, algo, freq, algo_name, mode ):
     toDate = end_date
     fromDate = start_date
+
+    try:
+        pinfo("==========: {} :========".format(session["access_token"]))
+    except:
+        perror("Access Token Not found")
+        return 0
 
     if n_clicks == 0:
         return 0
@@ -311,14 +328,15 @@ def resete_live_cache(n_clicks):
     Output('live-status', 'children'),
     [Input('live-table-update', 'n_intervals')])  
 def refresh_live_status(n_intervals):
-    status = 'Ticker Status:' + live_cache.get('Kite_Status') + ' | Total Ticks: ' +  live_cache.get('tick_count')
-
-    val = live_cache.get('last_id_msglive')
-    dateval = datetime.fromtimestamp(int(val.split('-')[0] )/1000).strftime('%d-%m-%y %H:%M:%S')
-
-    status = status + ' | last_id_msg: ' + dateval
-
+    status = 'connecting ...'
     try:
+        status = 'Ticker Status:' + live_cache.get('Kite_Status') + ' | Total Ticks: ' +  live_cache.get('tick_count')
+
+        val = live_cache.get('last_id_msglive')
+        dateval = datetime.fromtimestamp(int(val.split('-')[0] )/1000).strftime('%d-%m-%y %H:%M:%S')
+
+        status = status + ' | last_id_msg: ' + dateval
+
         peek_msg_queue = live_cache.xrange('msgBufferQueuelive')[-1]
         dateval = datetime.fromtimestamp(int(peek_msg_queue[0].split('-')[0] )/1000).strftime('%d-%m-%y %H:%M:%S')
         status = status + ' | last MsgQueue: ' + dateval
@@ -376,14 +394,7 @@ def toggle_trade(n1, v):
 #        return False
 
 ########################### Kite Login ###########################
-import os
-import json
-#import logging
-from datetime import date, datetime
-from decimal import Decimal
 
-from flask import Flask, request, jsonify, session
-from kiteconnect import KiteConnect
 
 #logging.basicConfig(level=logging.DEBUG)
 
