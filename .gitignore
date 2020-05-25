@@ -7,3 +7,7 @@ src/log/*
 src/app_example.py
 ssl/*
 freedom_aws_key.pem
+www/.well-known/pki-validation/
+www/.well-known/pki-validation/*
+www
+www/*
