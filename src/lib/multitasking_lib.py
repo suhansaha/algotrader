@@ -218,7 +218,7 @@ def notification_despatcher(ws, msg, id='*', Tick=True ):
     if Tick == True:
         # Push msg to msgBufferQueue
         #msg_id = cache.xadd('msgBufferQueue'+cache_postfix, msg, id=id)
-        msg_id = cache.xadd('msgBufferQueue'+cache_postfix, {'data':json.dumps(msg)}, id=id)
+        msg_id = cache.xadd('msgBufferQueue'+cache_postfix, {'data':json.dumps(msg)}, id=id, maxlen=5000)
         #pinfo(msg)
     
     # Step 2.2: else
