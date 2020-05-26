@@ -446,8 +446,8 @@ def order_notification_handler(manager, msg):
             price = data['average_price']
             state = cache.getValue(symbol,'state')
             cache_order_id = cache.getValue(symbol,'order_id')
-            if cache_order_id != order_id:
-                continue
+            #if cache_order_id != order_id:
+            #    continue
 
             if status == 'COMPLETE':
                 if state == 'PO:LONG':
@@ -846,13 +846,13 @@ def order_handler(manager, msg):
 
             if manager.pause == True:
                 pwarning('Order Handler Paused: Can not place order now: {}'.format(msg))
-            if state == 'PO:LONG':
-                cache.setValue(symbol, 'state','LONG')
-            elif state == 'PO:SHORT':
-                cache.setValue(symbol, 'state','SHORT')
-            else:
-                cache.setValue(symbol, 'state','SCANNING') 
-            return
+                if state == 'PO:LONG':
+                    cache.setValue(symbol, 'state','LONG')
+                elif state == 'PO:SHORT':
+                    cache.setValue(symbol, 'state','SHORT')
+                else:
+                    cache.setValue(symbol, 'state','SCANNING') 
+                return
 
             pinfo('Placeorder({}):{}: {}: {}x{}'.format(mode, cmd, symbol, quantity, price))
 

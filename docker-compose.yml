@@ -1,7 +1,7 @@
 version: '3'
 services:
   web:
-    image: suhansaha/talib_kite-alpine
+    image: suhansaha/talib_kite-alpine:latest
     command: gunicorn --worker-class eventlet -w 1 --bind 0.0.0.0:5000 --reload wsgi:app
     volumes:
       - ./src:/code
@@ -12,7 +12,7 @@ services:
       - db
     restart: always
   ticker:
-    image: suhansaha/talib_kite-alpine
+    image: suhansaha/talib_kite-alpine:latest
     command: python ticker.py
     volumes:
       - ./src:/code

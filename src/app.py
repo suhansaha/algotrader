@@ -54,7 +54,7 @@ def start_backtest(n_clicks, stocks, qty, sl, target, start_date, end_date, algo
         pinfo("==========: {} :========".format(session["access_token"]))
     except:
         perror("Access Token Not found")
-        return 0
+        #return 0
 
     if n_clicks == 0:
         return 0
@@ -221,17 +221,32 @@ def console_cmd(n_clicks, n_submit, cmd ):
 is_connected = lambda : True if live_cache.get('Kite_Status') == 'connected' or live_cache.get('Kite_Status') == 'connecting' else False 
 import time
 
+
 def get_live_table(df, tab='monitor'):
     if df.shape[0] > 0:
         if tab == 'monitor':
             df = df[['stock', 'qty', 'TP %', 'SL %', 'algo', 'freq', 'mode', 'state', 'ltp','last_processed',
         'amount', 'price','P&L','P&L %', 'Total P&L', 'Total P&L %','low', 'sl',  'ltp %','tp', 'high']]
+
+            columns = [{"name": i, "id": i} for i in df.columns]
+            return df.to_dict('records'), columns
         else:
             df = df[['stock', 'qty', 'TP %', 'SL %', 'algo', 'freq', 'mode', 'state']]
+
+            columns = [{"name": 'stock', "id": 'stock'},{"name": 'qty', "id": 'qty'},{"name": 'TP %', "id": 'TP %'},
+            {"name": 'SL %', "id": 'SL %'},{"name": 'algo', "id": 'algo'},{"name": 'freq', "id": 'freq'},
+            {"name": 'mode', "id": 'mode'},{"name": 'state', "id": 'state'}]
             
-        return df.to_dict('records'), [{"name": 'ss'+i, "id": i} for i in df.columns]
+            live_dropdown = {
+                    'freq': {
+                        'options': [{'label': '1D', 'value': '1D'}, {'label': '1T', 'value': '1T'}]
+                    }
+                }
+            pinfo(live_dropdown)
+            return df.to_dict('records'), columns
     else:
         return [],[{}]
+
 
 @dash_app.callback(
     [Output('table-editing-simple', 'data'),
