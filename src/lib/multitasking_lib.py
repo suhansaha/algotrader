@@ -812,6 +812,7 @@ def placeorder(prefix, df, stock, last_processed):
 def order_handler(manager, msg):
     global kws, kite, kite_api_key
     pdebug('order_handler({}): {}'.format(cache_postfix, msg))
+
     KiteAPIKey = cache.get('KiteAPIKey')
     kite = KiteConnect(api_key=KiteAPIKey)
     access_token = cache.get('access_token')
@@ -824,14 +825,14 @@ def order_handler(manager, msg):
         cmd = msg_j['cmd']
 
         if cmd == 'cancel':
-            mode = cache.getValue(symbol, 'mode')
             pinfo('Cancel Order({})'.format(mode))
 
-            if mode == 'live':
-                symbol = msg_j['symbol']
-                #pinfo(symbol)
-                cancel_order(kite, [symbol])
+            #if mode == 'live':
+            symbol = msg_j['symbol']
+            #pinfo(symbol)
+            cancel_order(kite, [symbol])
         elif cmd == 'cancelAll':
+            #if mode == 'live':
             cancel_all(kite)
         elif cmd == 'getOrder':
             pinfo(getOrders(kite))
@@ -841,6 +842,7 @@ def order_handler(manager, msg):
             symbol = msg_j['symbol']
             price = float(msg_j['price'])
             quantity = int(msg_j['qty'])
+
             mode = cache.getValue(symbol, 'mode')
             state = cache.getValue(symbol, 'state')
 

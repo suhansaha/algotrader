@@ -11,14 +11,6 @@ from lib.logging_lib import pdebug, pdebug1, pdebug5, perror, pinfo, cache_type,
 # ====== Tradescript Wrapper =======
 # Methods
 
-#TREND_UP = lambda a,b: ROC(a, b) >= 0.1
-#TREND_DOWN = lambda a,b: ROC(a, b) <= -0.1
-
-#import traceback
-#TREND_UP = lambda a,b: a > MAX(REF(a,1),b)
-#TREND_DOWN = lambda a,b: a < MIN(REF(a,1),b)
-
-#CROSSOVER = lambda a, b: (REF(a,1)<=REF(b,1)) & (a > b)
 
 #Heikin Asi
 def HAIKINASI(ohlc_data_df):
@@ -37,7 +29,8 @@ def HAIKINASI(ohlc_data_df):
     return (haOPEN, haHIGH, haLOW, haCLOSE)
 
 ohlc_get = lambda df, key: df.iloc[-1][key]
-REF = lambda df, i: df.iloc[-i-1]
+#REF = lambda df, i: df.iloc[-i-1]
+
 
 def order_details(cache, key, decision = 'WAIT', x2 = -1, qty=-1, sl=-1, tp=-1):
     cache.set('decision'+cache_type,decision)
@@ -47,7 +40,7 @@ def myalgo(cache, key, ohlc_data_df, algo=None, state='SCANNING', quick=False):
     pdebug7('myalgo {}'.format(key))
 
     if quick == False:
-        ohlc_data_temp = ohlc_data_df.tail(31).head(30) #to reduce calculation load, remove last candle
+        ohlc_data_temp = ohlc_data_df.tail(51).head(50) #to reduce calculation load, remove last candle
     else:
         ohlc_data_temp = ohlc_data_df
 
@@ -62,8 +55,8 @@ def myalgo(cache, key, ohlc_data_df, algo=None, state='SCANNING', quick=False):
     TIME = ohlc_data_temp.index.minute+ohlc_data_temp.index.hour*60
     
     REF = lambda df, i: df.shift(i)
-    TREND_UP = lambda : ROC(CLOSE, 10) >= 0.1
-    TREND_DOWN = lambda : ROC(CLOSE, 10) <= -0.1
+    TREND_UP = lambda a,b=3: ROC(a, b) > 0.1
+    TREND_DOWN = lambda a,b=3: ROC(a, b) < -0.1
     CROSSOVER = lambda a, b: (REF(a,1)<=REF(b,1)) & (a > b)
     sell = pd.DataFrame()
     buy = pd.DataFrame()
