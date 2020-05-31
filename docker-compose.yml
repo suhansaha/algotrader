@@ -72,6 +72,10 @@ services:
       - POSTGRES_USER=suhan
       - POSTGRES_PASSWORD=suhan005
       - POSTGRES_DB=freedom
+    expose:
+      - 5432
+    ports:
+      - 5432:5432
   redis:
     image: "redis:alpine"
     restart: always

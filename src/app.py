@@ -15,7 +15,6 @@ import json
 import os
 from datetime import date, datetime
 from decimal import Decimal
-from kiteconnect import KiteConnect
 import dash_auth
 
 from lib.user_pass import *

@@ -161,11 +161,81 @@ class cache_state(Redis):
 
 # Postgres
 from flask_sqlalchemy import SQLAlchemy
+from sqlalchemy.orm import relationship
+from sqlalchemy.ext.declarative import declarative_base
+Base = declarative_base()
+
 db = SQLAlchemy()
 
-class User(UserMixin, db.Model):
+class User(UserMixin, db.Model, Base):
     __tablename__ = 'users'
     id = db.Column(db.Integer, primary_key=True) # primary keys are required by SQLAlchemy
     email = db.Column(db.String(100), unique=True)
-    password = db.Column(db.String(100))
-    name = db.Column(db.String(1000))
+    password = db.Column(db.String(512))
+    name = db.Column(db.String(100))
+    mobile = db.Column(db.String(25), unique=True)
+    broker_id = db.Column(db.String(25), unique=True)
+    broker_name = db.Column(db.String(50))
+    api_key = db.Column(db.String(512), unique=True)
+    api_secret = db.Column(db.String(512), unique=True)
+    api_token = db.Column(db.String(512), unique=True)
+    session_id = db.Column(db.String(512), unique=True)
+    algos = relationship("Algos", back_populates="users")
+    portfolios = relationship("Portfolios", back_populates="users")
+    jobs = relationship("Jobs", back_populates="users")
+
+
+class Algos(db.Model, Base):
+    __tablename__ = 'algos'
+    id = db.Column(db.Integer, primary_key=True) # primary keys are required by SQLAlchemy
+    title = db.Column(db.String(100))
+    algo = db.Column(db.String(100))
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), index=True)
+    users = relationship("User", back_populates="algos")
+
+
+class Portfolios(db.Model, Base):
+    __tablename__ = 'portfolios'
+    id = db.Column(db.Integer, primary_key=True) # primary keys are required by SQLAlchemy
+    title = db.Column(db.String(100), index=True)
+    stock = db.Column(db.String(20))
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), index=True)
+    users = relationship("User", back_populates="portfolios")
+
+
+class Jobs(db.Model, Base):
+    __tablename__ = 'jobs'
+    id = db.Column(db.Integer, primary_key=True) # primary keys are required by SQLAlchemy
+    job_id = db.Column(db.String(100), unique=True)
+    job_type = db.Column(db.String(25))
+    job_status = db.Column(db.String(25))
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), index=True)
+    users = relationship("User", back_populates="jobs")
+    trades = relationship("Trades", back_populates="jobs")
+
+
+class Trades(db.Model, Base):
+    __tablename__ = 'trades'
+    id = db.Column(db.Integer, primary_key=True) # primary keys are required by SQLAlchemy
+    timestamp  = db.Column(db.Integer)
+    stock = db.Column(db.String(20), index=True)
+    price = db.Column(db.Float)
+    qty = db.Column(db.Float)
+    buy_or_sell = db.Column(db.String(20))
+    en_or_ex = db.Column(db.String(20))
+    order_id = db.Column(db.String(100))
+    job_id = db.Column(db.Integer, db.ForeignKey('jobs.id'), index=True)
+    jobs = relationship("Jobs", back_populates="trades")
+
+
+class OHLC(db.Model, Base):
+    __tablename__ = 'ohlc'
+    id = db.Column(db.Integer, primary_key=True) # primary keys are required by SQLAlchemy
+    stock = db.Column(db.String(20), index=True)
+    timestamp  = db.Column(db.Integer)
+    open = db.Column(db.Float)
+    high = db.Column(db.Float)
+    low = db.Column(db.Float)
+    close = db.Column(db.Float)
+    volume = db.Column(db.Float)
+

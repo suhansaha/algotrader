@@ -12,3 +12,5 @@ www/.well-known/pki-validation/*
 www
 www/*
 src/lib/user_pass.py
+docker-compose-test.yml
+db/*
