@@ -1,0 +1,14 @@
+#roc = ROC(CLOSE, 10)
+bbh, bbm, bbl = BBANDS(CLOSE)
+macd,macdsignal,macdhist = MACD(CLOSE)
+stddev = STDDEV(CLOSE)
+#rocbb = ROC(bbm, 10)
+
+#sell = (REF(roc,0) > 0.1) & (REF(haOPEN, 0) > REF(haCLOSE,0)) & (REF(haOPEN, 1) < REF(haCLOSE,1))
+#buy = (REF(roc,0) < -0.1) & (REF(haOPEN, 0) < REF(haCLOSE,0)) & (REF(haOPEN, 1) > REF(haCLOSE,1))
+
+
+#pinfo(macd.tail(1))
+#pinfo(macdsignal.tail(1))
+buy = CROSSOVER(macd, macdsignal)
+sell = CROSSOVER(macdsignal, macd)
