@@ -3,6 +3,7 @@ import numpy as np
 from redis import Redis
 from datetime import datetime, timedelta
 from lib.logging_lib import pdebug, pdebug1, pdebug5, perror, pinfo
+from flask_login import UserMixin
 
 userid = 'suhan'
 
@@ -156,3 +157,15 @@ class cache_state(Redis):
             
     def getKeys(self):
         return self.smembers(self.hash_postfix)
+
+
+# Postgres
+from flask_sqlalchemy import SQLAlchemy
+db = SQLAlchemy()
+
+class User(UserMixin, db.Model):
+    __tablename__ = 'users'
+    id = db.Column(db.Integer, primary_key=True) # primary keys are required by SQLAlchemy
+    email = db.Column(db.String(100), unique=True)
+    password = db.Column(db.String(100))
+    name = db.Column(db.String(1000))

@@ -1,6 +1,12 @@
+from flask import Flask, redirect, url_for, request
+from flask_login import LoginManager, login_required
+from lib.data_model_lib import User, db
+import os
+import dash
+import dash_html_components as html
 import pandas as pd
 from lib.layout_bootstrap import *
-from flask import Flask, render_template, request, jsonify, session
+from flask import render_template, request, jsonify, session
 from collections import deque
 from lib.logging_lib import pdebug, pdebug1, pdebug5, perror, pinfo, redis_conn, cache_type, cache_id, logger
 from lib.charting_lib import *
@@ -14,15 +20,69 @@ import dash_auth
 
 from lib.user_pass import *
 
-app = Flask(__name__)
-app.secret_key = os.urandom(24)
 
-dash_app = dash.Dash(__name__, server=app, external_stylesheets=external_stylesheets)
+def create_app():
+    app = Flask(__name__)
 
-auth = dash_auth.BasicAuth(
-    dash_app,
-    VALID_USERNAME_PASSWORD_PAIRS
+    app.config['SECRET_KEY'] = os.urandom(24)
+    app.config['SQLALCHEMY_DATABASE_URI'] = 'postgresql://suhan:suhan005@db:5432/freedom'
+    app.config['PREFERRED_URL_SCHEME'] = 'https'
+
+    db.init_app(app)
+
+    login_manager = LoginManager()
+    login_manager.login_view = 'auth.login'
+    login_manager.init_app(app)
+
+
+
+    @login_manager.user_loader
+    def load_user(user_id):
+        # since the user_id is just the primary key of our user table, use it in the query for the user
+        return User.query.get(int(user_id))
+
+    # blueprint for auth routes in our app
+    from auth import auth as auth_blueprint
+    app.register_blueprint(auth_blueprint)
+
+    # blueprint for non-auth parts of app
+    from main import main as main_blueprint
+    app.register_blueprint(main_blueprint)
+
+    @login_manager.unauthorized_handler
+    def unauthorized_callback():
+        return redirect(url_for('auth.login', _scheme='https',_external=True) + '?next=' + request.path)
+
+    return app
+
+app = create_app()
+
+
+db.create_all(app=create_app())
+
+dash_app = dash.Dash(
+    __name__,
+    server=app,
+    external_stylesheets=external_stylesheets,
+ #   routes_pathname_prefix='/dash/'
 )
+
+dash_app.layout = html.Div("My Dash app")
+
+@app.route("/dash", methods=['POST','GET'])
+@login_required
+def dash_index():
+    return dash_app.index()
+
+
+######################
+
+
+
+#auth = dash_auth.BasicAuth(
+#    dash_app,
+#    VALID_USERNAME_PASSWORD_PAIRS
+#)
 
 dash_app.layout = layout_bootstrap
 
@@ -394,115 +454,3 @@ def toggle_trade(n1, v):
         return 'Order Resume', "success"
     live_cache.publish('order_handlerlive', 'resume')
     return 'Order Pause', "danger"
-
-#@dash_app.callback(
-#    Output("live-stop", "active"),
-#    [Input('live-stop', 'n_clicks')] )
-#def start_trade(n_clicks):
-#    live_cache = cache_state(cache_id)
-#    if n_clicks % 2 == 1:
-#        pinfo('Stop Trade')
-#        live_cache = cache_state(cache_id)
-#        live_cache.publish('live_trade_handlerlive', 'CLOSE')
-#        return True
-#    else:
-#        return False
-
-########################### Kite Login ###########################
-
-
-#logging.basicConfig(level=logging.DEBUG)
-
-# Base settings
-#PORT = 5010
-HOST = "127.0.0.1"
-
-serializer = lambda obj: isinstance(obj, (date, datetime, Decimal)) and str(obj)  # noqa
-
-# Kite Connect App settings. Go to https://developers.kite.trade/apps/
-# to create an app if you don't have one.
-kite_api_key = 'b2w0sfnr1zr92nxm'
-kite_api_secret = 'jtga2mp2e5fn29h8w0pe2kb722g3dh1q'
-
-# Create a redirect url
-redirect_url = "http://{host}/login".format(host=HOST)
-
-# Login url
-login_url = "https://kite.trade/connect/login?api_key={api_key}".format(api_key=kite_api_key)
-
-# Kite connect console url
-console_url = "https://developers.kite.trade/apps/{api_key}".format(api_key=kite_api_key)
-
-
-def get_kite_client():
-    """Returns a kite client object
-    """
-    kite = KiteConnect(api_key=kite_api_key)
-    if "access_token" in session:
-        kite.set_access_token(session["access_token"])
-    return kite
-
-# Templates
-index_template = """
-    <div>Make sure your app with api_key - <b>{api_key}</b> has set redirect to <b>{redirect_url}</b>.</div>
-    <div>If not you can set it from your <a href="{console_url}">Kite Connect developer console here</a>.</div>
-    <a href="{login_url}"><h1>Login to generate access token.</h1></a>"""
-
-login_template = """
-    <h2 style="color: green">Success</h2>
-    <div>Access token: <b>{access_token}</b></div>
-    <h4>User login data</h4>
-    <pre>{user_data}</pre>
-    <a target="_blank" href="/holdings.json"><h4>Fetch user holdings</h4></a>
-    <a target="_blank" href="/orders.json"><h4>Fetch user orders</h4></a>
-    <a target="_blank" href="https://localhost"><h4>Start Trading with Freedom</h4></a>"""
-
-
-@app.route("/oauth")
-def index():
-    return index_template.format(
-        api_key=kite_api_key,
-        redirect_url=redirect_url,
-        console_url=console_url,
-        login_url=login_url
-    )
-
-@app.route("/login")
-def login():
-    request_token = request.args.get("request_token")
-
-    if not request_token:
-        return """
-            <span style="color: red">
-                Error while generating request token.
-            </span>
-            <a href='/'>Try again.<a>"""
-
-    kite = get_kite_client()
-    data = kite.generate_session(request_token, api_secret=kite_api_secret)
-    access_token = data["access_token"]
-    session["access_token"] = access_token
-    cache_live = cache_state(cache_id)
-    cache_live.set('access_token', access_token)
-    kite.set_access_token(access_token)
-
-    return login_template.format(
-        access_token=access_token,
-        user_data=json.dumps(
-            data,
-            indent=4,
-            sort_keys=True,
-            default=serializer
-        )
-    )
-
-@app.route("/holdings.json")
-def holdings():
-    kite = get_kite_client()
-    return jsonify(holdings=kite.holdings())
-
-
-@app.route("/orders.json")
-def orders():
-    kite = get_kite_client()
-    return jsonify(orders=kite.orders())

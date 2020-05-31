@@ -66,12 +66,18 @@ services:
         - 8888
   db:
     image: postgres
-    restart: always
+    volumes:
+      - ./db/postgres:/var/lib/postgresql/data/
     environment:
-      POSTGRES_PASSWORD: 'suhan005'
+      - POSTGRES_USER=suhan
+      - POSTGRES_PASSWORD=suhan005
+      - POSTGRES_DB=freedom
   redis:
     image: "redis:alpine"
     restart: always
+    volumes:
+      - ./db/redis-data:/var/lib/redis
+      - ./db/redis.conf:/usr/local/etc/redis/redis.conf
   nginx:
     build: ./docker/nginx
     expose:

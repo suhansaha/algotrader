@@ -563,7 +563,7 @@ def ohlc_tick_handler(manager, msg):
                             ohlc_data = getData(stock_id, fromDate, toDate, exchange, hdf_freq, False, stock_id)
 
                             ohlc_data = ohlc_data.tail(no_of_hist_candles)
-                            cache.setOHLC(hash_key,ohlc_data)
+                            #cache.setOHLC(hash_key,ohlc_data) #TODO
                         except:
                             pwarning('Historical data is not found {} {} {} {} {}'.format(stock_id, fromDate, toDate, exchange, hdf_freq))
 
