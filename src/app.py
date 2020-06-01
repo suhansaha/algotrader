@@ -17,14 +17,16 @@ from datetime import date, datetime
 from decimal import Decimal
 import dash_auth
 
-from lib.user_pass import *
+#from lib.user_pass import *
 
+db_url = os.environ.get('DATABASE_URL')
+#pinfo(db_url)
 
 def create_app():
     app = Flask(__name__)
 
     app.config['SECRET_KEY'] = os.urandom(24)
-    app.config['SQLALCHEMY_DATABASE_URI'] = 'postgresql://suhan:suhan005@db:5432/freedom'
+    app.config['SQLALCHEMY_DATABASE_URI'] = db_url
     app.config['PREFERRED_URL_SCHEME'] = 'https'
 
     db.init_app(app)

@@ -9,8 +9,9 @@ services:
       - 5000
     depends_on:
       - redis
-      - db
     restart: always
+    environment: 
+      - DATABASE_URL=${DATABASE_URL}
   ticker:
     image: suhansaha/talib_kite-alpine:latest
     command: python ticker.py
@@ -20,7 +21,6 @@ services:
       - 5000
     depends_on:
       - redis
-      - db
       - live
     restart: always
   backtest:
@@ -32,7 +32,6 @@ services:
       - 5000
     depends_on:
       - redis
-      - db
     restart: always
   live:
     image: suhansaha/talib_kite-alpine
@@ -43,7 +42,6 @@ services:
       - 5000
     depends_on:
       - redis
-      - db
     restart: always
   order:
     image: suhansaha/talib_kite-alpine
@@ -54,7 +52,6 @@ services:
       - 5000
     depends_on:
       - redis
-      - db
     restart: always
   jupyter:
     image: suhansaha/talib_kite-alpine
@@ -64,18 +61,6 @@ services:
         - ./src:/code
     expose:
         - 8888
-  db:
-    image: postgres
-    volumes:
-      - ./db/postgres:/var/lib/postgresql/data/
-    environment:
-      - POSTGRES_USER=suhan
-      - POSTGRES_PASSWORD=suhan005
-      - POSTGRES_DB=freedom
-    expose:
-      - 5432
-    ports:
-      - 5432:5432
   redis:
     image: "redis:alpine"
     restart: always
@@ -91,8 +76,7 @@ services:
       - 80:80
       - 443:443
     volumes:
-      - ./ssl:/etc/nginx/certs
-      - ./www:/usr/share/nginx/html
+      - ${SSL_src}:/etc/nginx/certs
     depends_on:
       - web
       - jupyter
