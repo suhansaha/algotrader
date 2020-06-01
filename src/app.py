@@ -28,6 +28,8 @@ def create_app():
     app.config['SECRET_KEY'] = os.urandom(24)
     app.config['SQLALCHEMY_DATABASE_URI'] = db_url
     app.config['PREFERRED_URL_SCHEME'] = 'https'
+    app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+    
 
     db.init_app(app)
 
