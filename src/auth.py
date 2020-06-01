@@ -57,8 +57,8 @@ def login_post():
 
     # check if user actually exists
     # take the user supplied password, hash it, and compare it to the hashed password in database
-    if not user or not check_password_hash(user.password, password):
-        flash('Please check your login details and try again.')
+    if not user or not check_password_hash(user.password, password) or not user.is_active == True:
+        flash('Please check your login details and try again. Reach out to suhansaha@gmail.com for assistance.')
         return redirect(url_for('auth.login', _scheme='https',_external=True)) # if user doesn't exist or password is wrong, reload the page
 
     # if the above check passes, then we know the user has the right credentials
@@ -116,6 +116,7 @@ login_template = """
 
 
 @auth.route("/oauth")
+@login_required
 def oauth():
     return index_template.format(
         api_key=kite_api_key,
@@ -154,12 +155,14 @@ def oauth_status():
     )
 
 @auth.route("/holdings.json")
+@login_required
 def holdings():
     kite = get_kite_client()
     return jsonify(holdings=kite.holdings())
 
 
 @auth.route("/orders.json")
+@login_required
 def orders():
     kite = get_kite_client()
     return jsonify(orders=kite.orders())

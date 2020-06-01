@@ -181,6 +181,8 @@ class User(UserMixin, db.Model, Base):
     api_token = db.Column(db.String(512), unique=True)
     session_id = db.Column(db.String(512), unique=True)
     algos = relationship("Algos", back_populates="users")
+    is_active = db.Column(db.Boolean, default=False)
+    is_admin = db.Column(db.Boolean, default=False)
     portfolios = relationship("Portfolios", back_populates="users")
     jobs = relationship("Jobs", back_populates="users")
 
