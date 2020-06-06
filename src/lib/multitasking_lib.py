@@ -270,7 +270,7 @@ def trade_init(stock_key, data):
 
 max_simu_msg = 100
 ohlc_handler_sem = Semaphore(max_simu_msg)
-def full_simulation(data, ohlc_data, cache, exchange, manager):
+def slow_full_simulation(data, ohlc_data, cache, exchange, manager):
     cache.publish('ohlc_tick_handler'+cache_postfix,'start')
 
     stock = data['stock'][-1]
@@ -335,6 +335,41 @@ def full_simulation(data, ohlc_data, cache, exchange, manager):
     pinfo('Kite_Simulator: Done: {}'.format(counter))
 
     notification_despatcher(None, 'done')
+
+
+def full_simulation(data, ohlc_data, cache, exchange, manager):
+    #cache.publish('ohlc_tick_handler'+cache_postfix,'start')
+
+    stock = data['stock'][-1]
+    no = ohlc_data[stock].shape[0]
+    counter = 0
+    stream_id = lambda x,y:str(int(x.tz_localize(tz='Asia/Calcutta').timestamp()+y)*1000)+'-0'
+    
+    for i in np.linspace(0,no-1,no): # Push data
+        if manager.abort == True:
+            pinfo('Abort Request: Full Simulation')
+            return
+
+        i = int(i)
+        msg_dict_open = []
+        msg_dict_high = []
+        msg_dict_low = []
+        msg_dict_close = []
+        for stock in data['stock']:
+            #pinfo(stock)
+            row = ohlc_data[stock].iloc[i:i+1]
+            index = ohlc_data[stock].index[i]
+            cache.pushOHLC(stock, row)
+            trade_lock_store[stock] = Lock()
+            trade_job(manager, stock)
+            cache.setValue(stock,'last_processed',str( index.tz_localize(tz='Asia/Calcutta').timestamp() ))
+            
+        counter = counter + 1
+        #cache.set('last_id_msg'+cache_postfix, index.strftime('%d:%m:%y %H:%M'))
+        
+
+    cache.set('done'+cache_postfix,1) #Trigger to UI thread
+    pinfo('Kite_Simulator: Done: {}'.format(counter))
 
 
 def quick_backtest(data, ohlc_data, cache, exchange):

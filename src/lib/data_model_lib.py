@@ -90,17 +90,16 @@ class cache_state(Redis):
         df = pd.read_json(self.get(hash_key))
         df1 =  pd.read_json(self.get(hash_key1))
         
-        #pinfo(df1['ltp'].head())
-        #return resample(df['ltp'], freq)
-        if not df1.empty:
-            resample_df = resample(df1['ltp'], freq)
+        tmp_df = df1
+        if not tmp_df.empty:
+            resample_df = resample(tmp_df['ltp'], freq)
             return resample_df
         
-        return df1
+        return tmp_df
     
     def setOHLC(self, key, df):
         # Overwrites existing content
-        self.setCache(key+self.hash_postfix+'OHLC', df)
+        #self.setCache(key+self.hash_postfix+'OHLC', df)
         self.setCache(key+self.hash_postfix+'TICK', ohlc_to_tick(df))
         return df
 
@@ -110,7 +109,7 @@ class cache_state(Redis):
         return df
 
     def pushOHLC(self, key, df):
-        self.pushCache(key+self.hash_postfix+'OHLC', df)
+        #self.pushCache(key+self.hash_postfix+'OHLC', df)
         self.pushCache(key+self.hash_postfix+'TICK', ohlc_to_tick(df))
         
     def getValue(self, key='', field=''):
