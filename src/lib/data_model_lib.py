@@ -81,15 +81,12 @@ class cache_state(Redis):
 
     def getOHLC(self, key, freq='1D'):
         freq = self.getValue(key, 'freq')
-        #if freq != '1D':
-        #    freq= '1T'
-        #pinfo(freq)
 
         hash_key = key+self.hash_postfix+'OHLC'
         hash_key1 = key+self.hash_postfix+'TICK'
-        df = pd.read_json(self.get(hash_key))
+        #df = pd.read_json(self.get(hash_key))
         df1 =  pd.read_json(self.get(hash_key1))
-        
+
         tmp_df = df1
         if not tmp_df.empty:
             resample_df = resample(tmp_df['ltp'], freq)
@@ -190,7 +187,7 @@ class Algos(db.Model, Base):
     __tablename__ = 'algos'
     id = db.Column(db.Integer, primary_key=True) # primary keys are required by SQLAlchemy
     title = db.Column(db.String(100))
-    algo = db.Column(db.String(100))
+    algo = db.Column(db.Text())
     user_id = db.Column(db.Integer, db.ForeignKey('users.id'), index=True)
     users = relationship("User", back_populates="algos")
 
@@ -239,4 +236,20 @@ class OHLC(db.Model, Base):
     low = db.Column(db.Float)
     close = db.Column(db.Float)
     volume = db.Column(db.Float)
+
+
+
+def update_algo_db(name, algo_str, user_id):
+    algo = Algos.query.filter(Algos.title==name, Algos.user_id==user_id).first()
+    if algo == None:
+        new_algo = Algos(title=name, algo=algo_str, user_id=user_id)
+        db.session.add(new_algo)
+        db.session.commit()
+    else:
+        algo.algo = algo_str
+        db.session.commit()
+
+def get_algo_list(user_id):
+    algos = Algos.query.filter(Algos.user_id==user_id).all()
+    return [alg.title for alg in algos]
 

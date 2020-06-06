@@ -65,7 +65,8 @@ def render_charts(data, trade, symbol, chart_type='haikin'):
     if data.shape[0] == 0:
         return ''
 
-    xaxis_len = data.shape[0] - 95
+    #xaxis_len = data.shape[0] - 95
+    xaxis_len = data.shape[0]
 
     range_min = min(80, xaxis_len)
     xMin = data.index[-1*range_min]

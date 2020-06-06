@@ -8,6 +8,7 @@ src/app_example.py
 ssl/*
 freedom_aws_key.pem
 src/lib/user_pass.py
-docker-compose-test.yml
+docker-compose-pgadmin.yml
+docker-compose-dev.yml
 db/*
 .env

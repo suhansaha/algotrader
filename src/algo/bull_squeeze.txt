@@ -1,3 +1,4 @@
+#Suhan Saha
 roc = ROC(CLOSE, 10)
 bbh, bbm, bbl = BBANDS(CLOSE)
 

@@ -2,7 +2,7 @@
 from flask import Blueprint, render_template, redirect, url_for, request, flash, session
 from werkzeug.security import generate_password_hash, check_password_hash
 from lib.data_model_lib import User, db, cache_state
-from flask_login import login_user, logout_user, login_required, login_manager
+from flask_login import login_user, logout_user, login_required, login_manager, current_user
 from lib.logging_lib import pdebug, pdebug1, pdebug5, perror, pinfo,  cache_type, cache_id
 from kiteconnect import KiteConnect
 import json

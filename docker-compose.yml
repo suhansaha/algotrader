@@ -12,17 +12,17 @@ services:
     restart: always
     environment: 
       - DATABASE_URL=${DATABASE_URL}
-  ticker:
-    image: suhansaha/talib_kite-alpine:latest
-    command: python ticker.py
-    volumes:
-      - ./src:/code
-    expose:
-      - 5000
-    depends_on:
-      - redis
-      - live
-    restart: always
+#  ticker:
+#    image: suhansaha/talib_kite-alpine:latest
+#    command: python ticker.py
+#    volumes:
+#      - ./src:/code
+#    expose:
+#      - 5000
+#    depends_on:
+#      - redis
+#      - live
+#    restart: always
   backtest:
     image: suhansaha/talib_kite-alpine
     command: python backtest.py
@@ -33,16 +33,16 @@ services:
     depends_on:
       - redis
     restart: always
-  live:
-    image: suhansaha/talib_kite-alpine
-    command: python live.py
-    volumes:
-      - ./src:/code
-    expose:
-      - 5000
-    depends_on:
-      - redis
-    restart: always
+#  live:
+#    image: suhansaha/talib_kite-alpine
+#    command: python live.py
+#    volumes:
+#      - ./src:/code
+#    expose:
+#      - 5000
+#    depends_on:
+#      - redis
+#    restart: always
   order:
     image: suhansaha/talib_kite-alpine
     command: python order.py
@@ -61,6 +61,8 @@ services:
         - ./src:/code
     expose:
         - 8888
+    environment: 
+      - DATABASE_URL=${DATABASE_URL}
   redis:
     image: "redis:alpine"
     restart: always
@@ -80,3 +82,12 @@ services:
     depends_on:
       - web
       - jupyter
+  pgadmin:
+    image: dpage/pgadmin4
+    expose:
+        - 80
+    ports:
+        - 5433:80
+    environment:
+        PGADMIN_DEFAULT_EMAIL: suhansaha@gmail.com
+        PGADMIN_DEFAULT_PASSWORD: suhan005

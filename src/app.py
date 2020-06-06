@@ -1,6 +1,6 @@
 from flask import Flask, redirect, url_for, request
-from flask_login import LoginManager, login_required
-from lib.data_model_lib import User, db
+from flask_login import LoginManager, login_required, current_user
+from lib.data_model_lib import *
 import os
 import dash
 import dash_html_components as html
@@ -98,6 +98,7 @@ def store_algo(algo, algo_name="default"):
     algo_f = open("algo/"+algo_name+".txt", "w")
     algo_f.write(algo)
     algo_f.close()
+    update_algo_db(algo_name, algo, current_user.id)
 
 
 @dash_app.callback(
@@ -250,7 +251,10 @@ def save_algo(n, algo, algo_name, is_open ):
         msg= "Failed to Save algo "+algo_name
         return
 
-    algo_list = backtest_cache.hkeys('algos')
+    
+    algo_list = get_algo_list(current_user.id)
+    #pinfo(algo_list)
+    #algo_list = backtest_cache.hkeys('algos')
     algo_list_options = pd.DataFrame({'label':algo_list,'value':algo_list}).to_dict(orient='records')
     if n:
         alert_is_open =  not is_open
@@ -261,8 +265,8 @@ def save_algo(n, algo, algo_name, is_open ):
     [Output("algo", "value"), Output('algo-name', 'value')],
     [Input('select_algo', 'value')] )
 def update_algo(algo_name ):
-
-    algo = backtest_cache.hget('algos',algo_name)
+    algo = Algos.query.filter(Algos.user_id==current_user.id, Algos.title==algo_name).first().algo
+    #algo = backtest_cache.hget('algos',algo_name)
     return algo, algo_name
 
 @dash_app.callback(

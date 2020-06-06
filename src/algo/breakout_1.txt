@@ -1,3 +1,4 @@
+#Suhan Saha 2
 roc = ROC(CLOSE, 10)
 bbh, bbm, bbl = BBANDS(CLOSE)
 macd,macdsignal,macdhist = MACD(CLOSE)
