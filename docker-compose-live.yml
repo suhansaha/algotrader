@@ -1,0 +1,73 @@
+version: '3'
+services:
+  web:
+    image: suhansaha/talib_kite-alpine:latest
+    command: gunicorn --worker-class eventlet -w 1 --bind 0.0.0.0:5000 --reload wsgi:app
+    volumes:
+      - ./src:/code
+    expose:
+      - 5000
+    depends_on:
+      - redis
+    restart: always
+    environment: 
+      - DATABASE_URL=${DATABASE_URL}
+  ticker:
+    image: suhansaha/talib_kite-alpine:latest
+    command: python ticker.py
+    volumes:
+      - ./src:/code
+    expose:
+      - 5000
+    depends_on:
+      - redis
+      - live
+    restart: always
+  backtest:
+    image: suhansaha/talib_kite-alpine
+    command: python backtest.py
+    volumes:
+      - ./src:/code
+    expose:
+      - 5000
+    depends_on:
+      - redis
+    restart: always
+  live:
+    image: suhansaha/talib_kite-alpine
+    command: python live.py
+    volumes:
+      - ./src:/code
+    expose:
+      - 5000
+    depends_on:
+      - redis
+    restart: always
+  order:
+    image: suhansaha/talib_kite-alpine
+    command: python order.py
+    volumes:
+      - ./src:/code
+    expose:
+      - 5000
+    depends_on:
+      - redis
+    restart: always
+  redis:
+    image: "redis:alpine"
+    restart: always
+    volumes:
+      - ./db/redis-data:/var/lib/redis
+      - ./db/redis.conf:/usr/local/etc/redis/redis.conf
+  nginx:
+    build: ./docker/nginx
+    expose:
+      - 443
+      - 80
+    ports:
+      - 80:80
+      - 443:443
+    volumes:
+      - ${SSL_src}:/etc/nginx/certs
+    depends_on:
+      - web
