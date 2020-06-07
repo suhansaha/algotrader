@@ -44,7 +44,7 @@ class cache_state(Redis):
         
         if self.hlen(hash_key) == 0 or reset == True:
             pinfo('Reset Cache for: {}'.format(hash_key))
-            self.hmset(hash_key, {'stock':key, 'qty':0, 'SL %':0.0, 'TP %':0.0, 'amount':0,'price':0.0,'P&L':0.0,'P&L %':0.0,'Total P&L':0.0,'Total P&L %':0.0,
+            self.hmset(hash_key, {'stock':'', 'qty':0, 'SL %':0.0, 'TP %':0.0, 'amount':0,'price':0.0,'P&L':0.0,'P&L %':0.0,'Total P&L':0.0,'Total P&L %':0.0,
                                        'low':0.0,'sl':0.0,'ltp':0.0,'ltp %':0.0,'tp':0.0,'high':0.0,'last_processed':0,
                                        'state':'INIT','mode':'PAUSE','algo':'', 'freq':'1T','hdf_freq':'minute', 'order_id':0})
             # Trade Log: [{timestamp, buy, sale, amount, profit, cum_profit, W_L, Mode}]
@@ -207,6 +207,7 @@ class Jobs(db.Model, Base):
     job_id = db.Column(db.String(100), unique=True)
     job_type = db.Column(db.String(25))
     job_status = db.Column(db.String(25))
+    job_info = db.Column(db.Text())
     user_id = db.Column(db.Integer, db.ForeignKey('users.id'), index=True)
     users = relationship("User", back_populates="jobs")
     trades = relationship("Trades", back_populates="jobs")
@@ -215,7 +216,7 @@ class Jobs(db.Model, Base):
 class Trades(db.Model, Base):
     __tablename__ = 'trades'
     id = db.Column(db.Integer, primary_key=True) # primary keys are required by SQLAlchemy
-    timestamp  = db.Column(db.Integer)
+    timestamp  = db.Column(db.String(100))
     stock = db.Column(db.String(20), index=True)
     price = db.Column(db.Float)
     qty = db.Column(db.Float)
@@ -252,4 +253,29 @@ def update_algo_db(name, algo_str, user_id):
 def get_algo_list(user_id):
     algos = Algos.query.filter(Algos.user_id==user_id).all()
     return [alg.title for alg in algos]
+
+
+from sqlalchemy import Column, Integer, String, create_engine, select
+from sqlalchemy.orm import sessionmaker
+import os
+database_url = os.environ.get('DATABASE_URL')
+
+engine = create_engine(database_url, echo=False)
+#Base = declarative_base(bind=engine)
+Session = sessionmaker(bind=engine)
+session = Session()
+
+#conn = session.bind
+
+def update_trade_log(t, s, p, q, b, e, j):
+    job = session.query(Jobs).filter(Jobs.job_id==j).first()
+    pinfo(job.job_id)
+    pinfo("{},{},{},{},{},{},{}".format(t,s,p,q,b,e,j))
+    job.trades.append(Trades(timestamp=t, stock=s, price=p, qty=q, buy_or_sell=b, en_or_ex=e, order_id=""))
+    #session.add(trade)
+    try:
+        session.commit()
+        pinfo("update_trade_log")
+    except Exception as e:
+        pinfo(e)
 

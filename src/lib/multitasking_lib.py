@@ -236,8 +236,6 @@ def trade_init(stock_key, data):
     # Initialize state
     pdebug("Trade_init: {}".format(stock_key))
 
-    cache.add(stock_key, reset=True)
-
     algo = data['algo']
     sl = data['sl']
     target = data['target']
@@ -245,23 +243,30 @@ def trade_init(stock_key, data):
     freq = data['freq']
     algo = data['algo']
     mode = data['mode']
+    job_id = data['job_id']
+
+    user_id = job_id.split('-')[1]
+    hash_key = stock_key+user_id
+    cache.add(hash_key, reset=True)
 
     if freq == '1D':
         hdf_freq='day'
     else:
         hdf_freq='minute'
 
-    cache.setValue(stock_key, 'algo', algo)
-    cache.setValue(stock_key, 'freq', freq)
-    cache.setValue(stock_key, 'qty', qty)
-    cache.setValue(stock_key, 'SL %', sl)
-    cache.setValue(stock_key, 'TP %', target)
-    cache.setValue(stock_key, 'P&L', 0)
-    cache.setValue(stock_key, 'Total P&L', 0)
-    cache.setValue(stock_key, 'price', 0)
-    cache.setValue(stock_key, 'hdf_freq', hdf_freq)
-    cache.setValue(stock_key, 'mode', mode)
-    cache.setValue(stock_key, 'last_processed', 0)
+    cache.setValue(hash_key, 'stock', stock_key)
+    cache.setValue(hash_key, 'algo', algo)
+    cache.setValue(hash_key, 'freq', freq)
+    cache.setValue(hash_key, 'qty', qty)
+    cache.setValue(hash_key, 'SL %', sl)
+    cache.setValue(hash_key, 'TP %', target)
+    cache.setValue(hash_key, 'P&L', 0)
+    cache.setValue(hash_key, 'Total P&L', 0)
+    cache.setValue(hash_key, 'price', 0)
+    cache.setValue(hash_key, 'hdf_freq', hdf_freq)
+    cache.setValue(hash_key, 'mode', mode)
+    cache.setValue(hash_key, 'last_processed', 0)
+    cache.setValue(hash_key, 'job_id', job_id)
 
     #cache.set(stock_key, pd.DataFrame().to_json(orient='columns')) #Used for plotting
     
@@ -341,6 +346,8 @@ def full_simulation(data, ohlc_data, cache, exchange, manager):
     #cache.publish('ohlc_tick_handler'+cache_postfix,'start')
 
     stock = data['stock'][-1]
+    user_id = data['job_id'].split('-')[1]
+
     no = ohlc_data[stock].shape[0]
     counter = 0
     stream_id = lambda x,y:str(int(x.tz_localize(tz='Asia/Calcutta').timestamp()+y)*1000)+'-0'
@@ -357,18 +364,19 @@ def full_simulation(data, ohlc_data, cache, exchange, manager):
         msg_dict_close = []
         for stock in data['stock']:
             #pinfo(stock)
+            hash_key = stock+user_id
             row = ohlc_data[stock].iloc[i:i+1]
             index = ohlc_data[stock].index[i]
-            cache.pushOHLC(stock, row)
-            trade_lock_store[stock] = Lock()
-            trade_job(manager, stock)
-            cache.setValue(stock,'last_processed',str( index.tz_localize(tz='Asia/Calcutta').timestamp() ))
+            cache.pushOHLC(hash_key, row)
+            trade_lock_store[hash_key] = Lock()
+            trade_job(manager, hash_key)
+            cache.setValue(hash_key,'last_processed',str( index.tz_localize(tz='Asia/Calcutta').timestamp() ))
             
         counter = counter + 1
         #cache.set('last_id_msg'+cache_postfix, index.strftime('%d:%m:%y %H:%M'))
         
 
-    cache.set('done'+cache_postfix,1) #Trigger to UI thread
+    cache.set('done'+user_id+cache_postfix,1) #Trigger to UI thread
     pinfo('Kite_Simulator: Done: {}'.format(counter))
 
 
@@ -389,10 +397,12 @@ def quick_backtest(data, ohlc_data, cache, exchange):
         trade_df1 = trade_df1.append(tmp_df)
         return trade_df1
 
+    user_id = data['job_id'].split('-')[1]
     for stock_key in data['stock']:
         temp_df = ohlc_data[stock_key]
         
-        hdf_freq = cache.getValue(stock_key, 'hdf_freq')
+        hash_key = stock_key+user_id
+        hdf_freq = cache.getValue(hash_key, 'hdf_freq')
         deltaT = getDeltaT(hdf_freq)
         
         toDate = temp_df.index[-1].strftime('%Y-%m-%d')
@@ -402,21 +412,21 @@ def quick_backtest(data, ohlc_data, cache, exchange):
         #pinfo(fromDate)
         pre_data = getData(stock_key, fromDate, toDate, exchange, hdf_freq, False, stock_key)
 
-        cache.setOHLC(stock_key, pre_data)
+        cache.setOHLC(hash_key, pre_data)
 
         trade_df1 = pd.DataFrame()
 
         my_algo = cache.hget('algos',data['algo'])
-        buy, sell = myalgo(cache, stock_key, pre_data, algo=my_algo, state='SCANNING', quick=True)
+        buy, sell = myalgo(cache, hash_key, pre_data, algo=my_algo, state='SCANNING', quick=True)
 
         #pinfo(pre_data['close'])
         trade_df1 = SELL(pre_data['close'], sell, trade_df1)
         trade_df1 = BUY(pre_data['close'], buy, trade_df1)
 
         #pinfo(trade_df1.sort_index().tail(10))
-        cache.setCache(stock_key+cache_postfix+'Trade',trade_df1.sort_index())
+        cache.setCache(hash_key+cache_postfix+'Trade',trade_df1.sort_index())
     
-    cache.set('done'+cache_postfix,1)
+    cache.set('done'+user_id+cache_postfix,1)
 
 
 def kite_simulator(manager, msg):
@@ -439,7 +449,8 @@ def kite_simulator(manager, msg):
         #cache.setValue(stock_key, 'hdf_freq', hdf_freq)        
         trade_init(stock_key, data)
 
-        hdf_freq = cache.getValue(stock_key, 'hdf_freq')
+        user_id = data['job_id'].split('-')[1]
+        hdf_freq = cache.getValue(stock_key+user_id, 'hdf_freq')
         df = getData(stock_key, startDate, toDate, exchange, hdf_freq, False, stock_key)
         ohlc_data[stock_key] = df
 
@@ -646,12 +657,12 @@ def trade_job(manager, hash_key):
     stock = cache.getValue(hash_key,'stock')
 
         
-    if cache.getValue(stock).empty:
+    if cache.getValue(hash_key).empty:
         perror('Exiting tradejob as there is no cache')
         return
 
     try:
-        trade_lock = trade_lock_store[stock]
+        trade_lock = trade_lock_store[hash_key]
         trade_lock.acquire()
     except:
         perror('Exiting trade job as could not get lock {}'.format(stock))
@@ -699,12 +710,12 @@ def trade_job(manager, hash_key):
             # 2: If Algo returns Buy: set State to 'Pending Order: Long'
             elif tradeDecision=="BUY":
                 cache.setValue(hash_key,'state','PO:LONG')
-                placeorder("B: EN: ", ohlc_df, stock, last_processed)
+                placeorder("B: EN: ", ohlc_df, hash_key, last_processed)
             
             # 3: If Algo returns Sell: set State to 'Pending Order: Short'
             elif tradeDecision=="SELL":
                 cache.setValue(hash_key,'state','PO:SHORT')
-                placeorder("S: EN: ", ohlc_df, stock, last_processed)
+                placeorder("S: EN: ", ohlc_df, hash_key, last_processed)
             
             # 4: Update TradeMetaData: Push order details to OrderQueue
         
@@ -726,20 +737,20 @@ def trade_job(manager, hash_key):
             # 1: If notification for AutoSquare Off: set state to init
             if time_val >= cutoff_time:
                 cache.setValue(hash_key,'state','SQUAREOFF:LONG')
-                placeorder("S: EX: ", ohlc_df, stock, last_processed)
+                placeorder("S: EX: ", ohlc_df, hash_key, last_processed)
             elif ltp < sl:
                 cache.setValue(hash_key,'state','SQUAREOFF:LONG')
-                placeorder("S: SL: ", ohlc_df, stock, last_processed)
+                placeorder("S: SL: ", ohlc_df, hash_key, last_processed)
             elif ltp > tp:
                 cache.setValue(hash_key,'state','SQUAREOFF:LONG')
-                placeorder("S: TP: ", ohlc_df, stock, last_processed)
+                placeorder("S: TP: ", ohlc_df, hash_key, last_processed)
                 pass
             else:
                 # 2: Else run trading algorithm for square off
                 tradeDecision = myalgo(cache, hash_key, ohlc_df, algo, state)
                 if tradeDecision == "SELL":
                     cache.setValue(hash_key,'state','SQUAREOFF:LONG')
-                    placeorder("S: EX: ", ohlc_df, stock, last_processed)
+                    placeorder("S: EX: ", ohlc_df, hash_key, last_processed)
 
                     # 3: If algo returns square off: then push square off details to OrderQueue, set state to 'Awaiting Square Off'   
         
@@ -748,19 +759,19 @@ def trade_job(manager, hash_key):
             # 1: If notification for AutoSquare Off: set state to init
             if time_val >= cutoff_time:
                 cache.setValue(hash_key,'state','SQUAREOFF:SHORT')
-                placeorder("B: EX: ", ohlc_df, stock, last_processed)
+                placeorder("B: EX: ", ohlc_df, hash_key, last_processed)
             elif ltp > sl:
                 cache.setValue(hash_key,'state','SQUAREOFF:SHORT')
-                placeorder("B: SL: ", ohlc_df, stock, last_processed)
+                placeorder("B: SL: ", ohlc_df, hash_key, last_processed)
             elif ltp < tp:
                 cache.setValue(hash_key,'state','SQUAREOFF:SHORT')
-                placeorder("B: TP: ", ohlc_df, stock, last_processed)
+                placeorder("B: TP: ", ohlc_df, hash_key, last_processed)
             else:
                 # 2: Else run trading algorithm for square off
                 tradeDecision = myalgo(cache, hash_key, ohlc_df, algo, state)
                 if tradeDecision == "BUY":
                     cache.setValue(hash_key,'state','SQUAREOFF:SHORT')
-                    placeorder("B: EX: ", ohlc_df, stock, last_processed)
+                    placeorder("B: EX: ", ohlc_df, hash_key, last_processed)
                 
                     # 3: If algo returns square off: then push square off details to OrderQueue, set state to 'Awaiting Square Off'
             
@@ -783,21 +794,24 @@ def trade_job(manager, hash_key):
 #####################################################################################################################
 
 
-def placeorder(prefix, df, stock, last_processed):
+def placeorder(prefix, df, hash_key, last_processed):
+
+    stock = cache.getValue(hash_key,'stock')
+    job_id =  cache.getValue(hash_key,'job_id')
     logtrade(prefix+" : {} : {} -> {}".format(last_processed, stock, ohlc_get(df,'close')))
 
-    tp_pt = float(cache.getValue(stock,'TP %'))
-    sl_pt = float(cache.getValue(stock,'SL %'))
-    qty = float(cache.getValue(stock,'qty'))
+    tp_pt = float(cache.getValue(hash_key,'TP %'))
+    sl_pt = float(cache.getValue(hash_key,'SL %'))
+    qty = float(cache.getValue(hash_key,'qty'))
 
     ltp = df.iloc[-1:]['close']
     amount = ltp[0] *qty
     sl = 0
     tp = 0
-    price = float(cache.getValue(stock,'price'))
+    price = float(cache.getValue(hash_key,'price'))
     profit = 0
     pl_pt = 0
-    totalprofit =  float(cache.getValue(stock,'Total P&L'))
+    totalprofit =  float(cache.getValue(hash_key,'Total P&L'))
 
     pdebug("Place Order: {},{},{},{}".format(ltp[0], price, profit, totalprofit))
     tmp_df = pd.DataFrame()
@@ -806,24 +820,24 @@ def placeorder(prefix, df, stock, last_processed):
         sl = ltp[0] * ( 1 - sl_pt / 100 )
         tp =  ltp[0] * ( 1 + tp_pt / 100 )
         price = ltp[0] 
-        cache.publish('order_handler'+cache_postfix,json.dumps({'cmd':'buy','symbol':stock,'price':ltp[0],'qty':qty}))
+        cache.publish('order_handler'+cache_postfix,json.dumps({'cmd':'buy','symbol':hash_key,'price':ltp[0],'qty':qty}))
     elif prefix == "B: EX: " or prefix == "B: SL: " or prefix == "B: TP: ":
         tmp_df['buy'] = ltp
         profit = (price - ltp[0]) * qty
         pl_pt = profit/price * 100
-        cache.publish('order_handler'+cache_postfix,json.dumps({'cmd':'buy','symbol':stock,'price':ltp[0],'qty':qty}))
+        cache.publish('order_handler'+cache_postfix,json.dumps({'cmd':'buy','symbol':hash_key,'price':ltp[0],'qty':qty}))
         price = 0
     elif prefix == "S: EN: ":
         tmp_df['sell'] = ltp
         sl = ltp[0] * ( 1 + sl_pt / 100 )
         tp =  ltp[0] * ( 1 - tp_pt / 100 )
         price = ltp[0] 
-        cache.publish('order_handler'+cache_postfix,json.dumps({'cmd':'sell','symbol':stock,'price':ltp[0],'qty':qty}))
+        cache.publish('order_handler'+cache_postfix,json.dumps({'cmd':'sell','symbol':hash_key,'price':ltp[0],'qty':qty}))
     elif prefix == "S: EX: " or prefix == "S: SL: " or prefix == "S: TP: ":
         tmp_df['sell'] = ltp
         profit = (ltp[0] - price) * qty
         pl_pt = profit/price * 100
-        cache.publish('order_handler'+cache_postfix,json.dumps({'cmd':'sell','symbol':stock,'price':ltp[0],'qty':qty}))
+        cache.publish('order_handler'+cache_postfix,json.dumps({'cmd':'sell','symbol':hash_key,'price':ltp[0],'qty':qty}))
         price = 0
 
     totalprofit = totalprofit + profit
@@ -831,17 +845,20 @@ def placeorder(prefix, df, stock, last_processed):
     total_pt = totalprofit / amount * 100
     
 
-    cache.setValue(stock,'amount', amount)
-    cache.setValue(stock,'sl', sl)
-    cache.setValue(stock,'tp', tp)
-    cache.setValue(stock,'price', price)
-    cache.setValue(stock,'P&L', profit)
-    cache.setValue(stock,'P&L %', pl_pt)
-    cache.setValue(stock,'Total P&L', totalprofit)
-    cache.setValue(stock,'Total P&L %', total_pt)
+    cache.setValue(hash_key,'amount', amount)
+    cache.setValue(hash_key,'sl', sl)
+    cache.setValue(hash_key,'tp', tp)
+    cache.setValue(hash_key,'price', price)
+    cache.setValue(hash_key,'P&L', profit)
+    cache.setValue(hash_key,'P&L %', pl_pt)
+    cache.setValue(hash_key,'Total P&L', totalprofit)
+    cache.setValue(hash_key,'Total P&L %', total_pt)
 
     tmp_df['mode'] = prefix
-    cache.pushTrade(stock, tmp_df)
+    cache.pushTrade(hash_key, tmp_df) #TODO
+
+    update_trade_log(last_processed, stock, price, qty, prefix, prefix, job_id)
+
 
 
 def order_handler(manager, msg):
@@ -874,21 +891,22 @@ def order_handler(manager, msg):
 
         else:
 
-            symbol = msg_j['symbol']
+            hash_key = msg_j['symbol']
             price = float(msg_j['price'])
             quantity = int(msg_j['qty'])
 
-            mode = cache.getValue(symbol, 'mode')
-            state = cache.getValue(symbol, 'state')
+            symbol = cache.getValue(hash_key, 'stock')
+            mode = cache.getValue(hash_key, 'mode')
+            state = cache.getValue(hash_key, 'state')
 
             if manager.pause == True:
                 pwarning('Order Handler Paused: Can not place order now: {}'.format(msg))
                 if state == 'PO:LONG':
-                    cache.setValue(symbol, 'state','LONG')
+                    cache.setValue(hash_key, 'state','LONG')
                 elif state == 'PO:SHORT':
-                    cache.setValue(symbol, 'state','SHORT')
+                    cache.setValue(hash_key, 'state','SHORT')
                 else:
-                    cache.setValue(symbol, 'state','SCANNING') 
+                    cache.setValue(hash_key, 'state','SCANNING') 
                 return
 
             pinfo('Placeorder({}):{}: {}: {}x{}'.format(mode, cmd, symbol, quantity, price))
@@ -896,26 +914,26 @@ def order_handler(manager, msg):
             if cmd == 'buy':
                 if mode == 'live':
                     order_id = buy_limit(kite, symbol, price, quantity)
-                    cache.setValue(symbol,'order_id', order_id)
+                    cache.setValue(hash_key,'order_id', order_id)
                 else:
-                    state = cache.getValue(symbol, 'state')
+                    state = cache.getValue(hash_key, 'state')
                     pinfo(state)
                     if state == 'PO:LONG':
-                        cache.setValue(symbol, 'state','LONG')
+                        cache.setValue(hash_key, 'state','LONG')
                     else:
-                        cache.setValue(symbol, 'state','SCANNING')                    
+                        cache.setValue(hash_key, 'state','SCANNING')                    
 
             elif cmd == 'sell':
                 if mode == 'live':
                     order_id = sell_limit(kite, symbol, price, quantity)
-                    cache.setValue(symbol,'order_id', order_id)
+                    cache.setValue(hash_key,'order_id', order_id)
                 else:
-                    state = cache.getValue(symbol, 'state')
+                    state = cache.getValue(hash_key, 'state')
                     pinfo(state)
                     if state == 'PO:SHORT':
-                        cache.setValue(symbol, 'state','SHORT')
+                        cache.setValue(hash_key, 'state','SHORT')
                     else:
-                        cache.setValue(symbol, 'state','SCANNING')
+                        cache.setValue(hash_key, 'state','SCANNING')
 
         
     except:

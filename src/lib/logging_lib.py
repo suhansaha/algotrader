@@ -1,6 +1,7 @@
 #setup logging
 import logging
 from redis import Redis
+
 #logging.basicConfig(filemode='w+')
 #logging.basicConfig(format='%(levelname)s:\t%(message)s', datefmt='%m-%d %H:%M:%S')
 logger = logging.getLogger('freedom')

@@ -58,7 +58,7 @@ def plot_trade(fig, df, toffset, pos=1):
 
 
 cache_type_global = ""
-def render_charts(data, trade, symbol, chart_type='haikin'): 
+def render_charts(data, trade, hash_key, chart_type='haikin'): 
     global cache_type_global
     price = data
 
@@ -76,7 +76,8 @@ def render_charts(data, trade, symbol, chart_type='haikin'):
     yMax = data.iloc[-1*range_min:-1]['high'].max()
 
 
-    freq = redis_conn.hget(symbol+cache_type_global, 'freq')
+    freq = redis_conn.hget(hash_key+cache_type_global, 'freq')
+    symbol = redis_conn.hget(hash_key+cache_type_global, 'stock')
     #pinfo(freq)
     if freq != '1D':
         range_break = [{'pattern': 'hour', 'bounds': [16, 9]}, {'bounds': ['sat', 'mon']}]
@@ -140,20 +141,21 @@ def render_charts(data, trade, symbol, chart_type='haikin'):
     return fig
 
 
-def freedom_chart(symbol, cache_type, chart_type='haikin'):
+def freedom_chart(hash_key, cache_type, chart_type='haikin'):
     global cache_type_global
 
+    #pinfo(hash_key)
     cache_type_global = cache_type
     #if not redis_conn.exists(symbol):
     #    return "not found"
     #print(cache_type)
     my_cache = cache_state(cache_type)
 
-    dfohlc = my_cache.getOHLC(symbol)
+    dfohlc = my_cache.getOHLC(hash_key)
 
-    trade_df = pd.read_json(redis_conn.get(symbol+cache_type+'Trade'), orient='columns')
+    trade_df = pd.read_json(redis_conn.get(hash_key+cache_type+'Trade'), orient='columns')
 
     trade_df = trade_df.tail(2500) # safety for algo on longer durations
     dfohlc = dfohlc.tail(2500)
 
-    return render_charts(dfohlc, trade_df, symbol, chart_type)
+    return render_charts(dfohlc, trade_df, hash_key, chart_type)

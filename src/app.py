@@ -91,7 +91,7 @@ dash_app.layout = layout_bootstrap
 
 backtest_cache = cache_state(cache_type)
 live_cache = cache_state(cache_id)
-backtest_cache.set('done'+cache_type,1)
+#backtest_cache.set('done'+current_user.id+cache_type,1)
 
 def store_algo(algo, algo_name="default"):
     live_cache.hset("algos",algo_name, algo)
@@ -134,7 +134,9 @@ def start_backtest(n_clicks, stocks, qty, sl, target, start_date, end_date, algo
     pdebug1(stocks)
     # Step 1: Create the msg for initiating backtest
     #pinfo(freq)
-    backtest_msg={'stock':stocks,'sl':sl,'target':target,'qty':qty,'algo':algo_name,'fromDate':fromDate,'toDate':toDate,'freq':freq, 'mode':backtest}
+
+    job_id = "{}-{}".format(int(dt.now().timestamp()*1000000),current_user.id) 
+    backtest_msg={'job_id':job_id, 'stock':stocks,'sl':sl,'target':target,'qty':qty,'algo':algo_name,'fromDate':fromDate,'toDate':toDate,'freq':freq, 'mode':backtest}
 
     try:
         store_algo(algo, algo_name)
@@ -147,9 +149,14 @@ def start_backtest(n_clicks, stocks, qty, sl, target, start_date, end_date, algo
         backtest_cache.set('stock',stock) #TODO: replace
 
     # Step 4: Done is set to 0: Backtest is in progress, will be resetted by backtest job
-    backtest_cache.set('done'+cache_type,0)
+    backtest_cache.set('done'+str(current_user.id)+cache_type,0)
     # Step 5: Send the msg to backtest thread to initiate the back test
     pdebug(json.dumps(backtest_msg))
+
+    #job = Jobs(job_id='', job_type='', job_status='')   
+    current_user.jobs.append(Jobs(job_id=job_id, job_type='backtest_'+backtest, job_status='INIT', job_info=json.dumps(backtest_msg)))
+    db.session.commit()
+
     backtest_cache.publish('kite_simulator'+cache_type,json.dumps(backtest_msg))
     
     # Step 6: Return 0 to reset n_intervals count
@@ -160,10 +167,14 @@ def start_backtest(n_clicks, stocks, qty, sl, target, start_date, end_date, algo
     [Input('graph-update', 'n_intervals'), 
      Input('button', 'n_clicks')])
 def update_intervals(n_intervals, clicks):
-    pdebug1("Update Intervals: {}: {}".format(n_intervals, backtest_cache.get('done')))
+    hash_key = 'done'+str(current_user.id)+cache_type
+
+    if clicks == 0:
+        backtest_cache.set(hash_key,1)
+    pdebug1("Update Intervals: {}: {}".format(n_intervals, backtest_cache.get(hash_key)))
  
     # if done is set to 1 then backtest is complete -> Time to disable interval and enable backtest button
-    if backtest_cache.get('done'+cache_type) == "1": # Backtest complete
+    if backtest_cache.get(hash_key) == "1": # Backtest complete
         pdebug("Returning True: Disable Interval")
         return True, False, 'Go' 
     else: # Backtest is in progress
@@ -190,6 +201,7 @@ def update_select_chart(values ):
 def update_output(n_intervals, value, chart_type ):
     #stock = redis_conn.get('stock')
     stock = value
+    hash_key = stock+str(current_user.id)
     pdebug1("In update output: {}".format(stock))
     
     try:
@@ -206,11 +218,12 @@ def update_output(n_intervals, value, chart_type ):
     if stock == '':
         return fig, 'logMsg', 'No option selected', ''
 
-    summary_stat = datetime.fromtimestamp(float(backtest_cache.hget(stock+cache_type, 'last_processed')))
+    summary_stat = datetime.fromtimestamp(float(backtest_cache.hget(hash_key+cache_type, 'last_processed')))
 
-    if backtest_cache.get('done'+cache_type) == "1":
-        fig = freedom_chart(stock, cache_type, chart_type) ## to reduce load on processor
-        trade_df = pd.read_json( redis_conn.get(stock+cache_type+'Trade') )
+    if backtest_cache.get('done'+str(current_user.id)+cache_type) == "1": ## to reduce load on processor
+        #pinfo(hash_key)
+        fig = freedom_chart(hash_key, cache_type, chart_type) 
+        trade_df = pd.read_json( redis_conn.get(hash_key+cache_type+'Trade') )
 
         try:
             (total_profit, max_loss, max_profit, total_win, total_loss, max_winning_streak, max_loosing_streak, trade_log_df) = trade_analysis_raw(trade_df)
@@ -331,14 +344,17 @@ def add_row(values, ts, rows, columns):
         for value in values:
             if value not in cache_keys:
                 symbol = value
-                live_cache.add(symbol)
-                live_cache.setValue(symbol,'qty','1')
-                live_cache.setValue(symbol,'SL %','0.4')
-                live_cache.setValue(symbol,'TP %','1')
-                live_cache.setValue(symbol,'algo','haikin_1_new')
-                live_cache.setValue(symbol,'freq','1T')
-                live_cache.setValue(symbol,'last_processed',datetime.now().timestamp())
-                live_cache.setValue(symbol,'mode','paper')
+                hash_key = symbol+current_user.id
+
+                live_cache.add(hash_key)
+                live_cache.setValue(hash_key,'stock',symbol)
+                live_cache.setValue(hash_key,'qty','1')
+                live_cache.setValue(hash_key,'SL %','0.4')
+                live_cache.setValue(hash_key,'TP %','1')
+                live_cache.setValue(hash_key,'algo','haikin_1_new')
+                live_cache.setValue(hash_key,'freq','1T')
+                live_cache.setValue(hash_key,'last_processed',datetime.now().timestamp())
+                live_cache.setValue(hash_key,'mode','paper')
 
                 token = int(live_cache.hmget('eq_token',symbol)[0])
 
