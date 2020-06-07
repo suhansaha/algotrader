@@ -23,18 +23,18 @@ services:
 #      - redis
 #      - live
 #    restart: always
-  backtest:
-    image: suhansaha/talib_kite-alpine
-    command: python backtest.py
-    volumes:
-      - ./src:/code
-    expose:
-      - 5000
-    depends_on:
-      - redis
-    restart: always
-    environment: 
-      - DATABASE_URL=${DATABASE_URL}
+#  backtest:
+#    image: suhansaha/talib_kite-alpine
+#    command: python backtest.py
+#    volumes:
+#      - ./src:/code
+#    expose:
+#      - 5000
+#    depends_on:
+#      - redis
+#    restart: always
+#    environment: 
+#      - DATABASE_URL=${DATABASE_URL}
 #  live:
 #    image: suhansaha/talib_kite-alpine
 #    command: python live.py
@@ -45,18 +45,18 @@ services:
 #    depends_on:
 #      - redis
 #    restart: always
-  order:
-    image: suhansaha/talib_kite-alpine
-    command: python order.py
-    volumes:
-      - ./src:/code
-    expose:
-      - 5000
-    depends_on:
-      - redis
-    restart: always
-    environment: 
-      - DATABASE_URL=${DATABASE_URL}
+#  order:
+#    image: suhansaha/talib_kite-alpine
+#    command: python order.py
+#    volumes:
+#      - ./src:/code
+#    expose:
+#      - 5000
+#    depends_on:
+#      - redis
+#    restart: always
+#    environment: 
+#      - DATABASE_URL=${DATABASE_URL}
   jupyter:
     image: suhansaha/talib_kite-alpine
     command: jupyter notebook --config=/code/jupyter_notebook_config.py --ip=0.0.0.0 --port=8888

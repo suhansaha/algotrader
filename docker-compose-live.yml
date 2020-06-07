@@ -23,36 +23,36 @@ services:
       - redis
       - live
     restart: always
-  backtest:
-    image: suhansaha/talib_kite-alpine
-    command: python backtest.py
-    volumes:
-      - ./src:/code
-    expose:
-      - 5000
-    depends_on:
-      - redis
-    restart: always
-  live:
-    image: suhansaha/talib_kite-alpine
-    command: python live.py
-    volumes:
-      - ./src:/code
-    expose:
-      - 5000
-    depends_on:
-      - redis
-    restart: always
-  order:
-    image: suhansaha/talib_kite-alpine
-    command: python order.py
-    volumes:
-      - ./src:/code
-    expose:
-      - 5000
-    depends_on:
-      - redis
-    restart: always
+  #backtest:
+  #  image: suhansaha/talib_kite-alpine
+  #  command: python backtest.py
+  #  volumes:
+  #    - ./src:/code
+  #  expose:
+  #    - 5000
+  #  depends_on:
+  #    - redis
+  #  restart: always
+  #live:
+  #  image: suhansaha/talib_kite-alpine
+  #  command: python live.py
+  #  volumes:
+  #    - ./src:/code
+  #  expose:
+  #    - 5000
+  #  depends_on:
+  #    - redis
+  #  restart: always
+  #order:
+  #  image: suhansaha/talib_kite-alpine
+  #  command: python order.py
+  #  volumes:
+  #    - ./src:/code
+  #  expose:
+  #    - 5000
+  #  depends_on:
+  #    - redis
+  #  restart: always
   redis:
     image: "redis:alpine"
     restart: always
