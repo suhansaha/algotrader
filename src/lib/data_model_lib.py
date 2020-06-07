@@ -269,13 +269,13 @@ session = Session()
 
 def update_trade_log(t, s, p, q, b, e, j):
     job = session.query(Jobs).filter(Jobs.job_id==j).first()
-    pinfo(job.job_id)
-    pinfo("{},{},{},{},{},{},{}".format(t,s,p,q,b,e,j))
+    #pinfo(job.job_id)
+    #pinfo("{},{},{},{},{},{},{}".format(t,s,p,q,b,e,j))
     job.trades.append(Trades(timestamp=t, stock=s, price=p, qty=q, buy_or_sell=b, en_or_ex=e, order_id=""))
     #session.add(trade)
     try:
         session.commit()
-        pinfo("update_trade_log")
+        #pinfo("update_trade_log")
     except Exception as e:
         pinfo(e)
 
