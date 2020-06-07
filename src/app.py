@@ -223,7 +223,7 @@ def update_output(n_intervals, value, chart_type ):
     if backtest_cache.get('done'+str(current_user.id)+cache_type) == "1": ## to reduce load on processor
         #pinfo(hash_key)
         fig = freedom_chart(hash_key, cache_type, chart_type) 
-        trade_df = pd.read_json( redis_conn.get(hash_key+cache_type+'Trade') )
+        trade_df = backtest_cache.getTrades(hash_key)
 
         try:
             (total_profit, max_loss, max_profit, total_win, total_loss, max_winning_streak, max_loosing_streak, trade_log_df) = trade_analysis_raw(trade_df)

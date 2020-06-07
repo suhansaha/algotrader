@@ -4,9 +4,16 @@ from redis import Redis
 from datetime import datetime, timedelta
 from lib.logging_lib import pdebug, pdebug1, pdebug5, perror, pinfo
 from flask_login import UserMixin
+from sqlalchemy import Column, Integer, String, create_engine, select, and_
+from sqlalchemy.orm import sessionmaker
+import os
+database_url = os.environ.get('DATABASE_URL')
 
-userid = 'suhan'
-
+engine = create_engine(database_url, echo=False)
+#Base = declarative_base(bind=engine)
+Session = sessionmaker(bind=engine)
+session = Session()
+conn = session.bind
        
 to_tick = lambda df, delta: pd.DataFrame( data = df.values, index =  df.index+timedelta(seconds=delta), columns=['ltp']  )
 def ohlc_to_tick(df):
@@ -52,28 +59,55 @@ class cache_state(Redis):
             self.set(hash_key+'Trade', pd.DataFrame().to_json(orient='columns'))
             self.set(hash_key+'OHLC', pd.DataFrame().to_json(orient='columns'))
             self.set(hash_key+'TICK', pd.DataFrame().to_json(orient='columns'))
+            with pd.HDFStore('data/'+hash_key+'TICK', mode="w") as f:
+                pd.DataFrame().to_hdf(f, format='t', key=hash_key+'TICK')
+            with pd.HDFStore('data/'+hash_key+'Trade', mode="w") as f:
+                pd.DataFrame().to_hdf(f, format='t', key=hash_key+'Trade')
         self.sadd(self.hash_postfix, key)
 
         pinfo('{}=>{}'.format(hash_key, self.hgetall(hash_key)))
  
     
     def pushCache(self, hash_key, df):
-        cache_buff = pd.read_json(self.get(hash_key))
+        #cache_buff = pd.read_json(self.get(hash_key))
         #pinfo(cache_buff.tail())
         #pinfo(df.head())
-        cache_buff = cache_buff.append(df)
-        try:
-            self.setCache(hash_key, cache_buff)
-        except:
-            pass
-    
+        #cache_buff = cache_buff.append(df)
+        #try:
+        #    self.setCache(hash_key, cache_buff)
+        #except:
+        #    pass
+        with pd.HDFStore('data/'+hash_key, mode="r+") as f:
+            df.to_hdf(f,append=True, mode='r+', format='t', key=hash_key)
+
     def setCache(self, hash_key, df):
-        self.set(hash_key, df.to_json(orient='columns'))
+        with pd.HDFStore('data/'+hash_key, mode="w") as f:
+            df.to_hdf(f, format='t', key=hash_key)
+
+            #self.set(hash_key, df.to_json(orient='columns'))
 
     def getTrades(self, key):
-        hash_key = key+self.hash_postfix+'Trade'
-        df = pd.read_json(self.get(hash_key))
-        return df
+        #hash_key = key+self.hash_postfix+'Trade'
+        #df = pd.read_json(self.get(hash_key))
+        #with pd.HDFStore('data/'+hash_key, mode="r", key=hash_key) as f:
+        #    df = pd.read_hdf(f)
+
+        job_id = self.getValue(key,'job_id')
+        stock = self.getValue(key,'stock')
+        job = session.query(Jobs).filter(Jobs.job_id==job_id).first().id
+
+        trades = session.query(Trades).filter(Trades.job_id==job)
+
+        tmp_df = pd.read_sql(select([Trades]).where(and_(Trades.job_id==job, Trades.stock==stock)), conn)
+
+        tmp_df["buy"] = tmp_df[tmp_df['buy_or_sell']=='B'].price
+        tmp_df["sell"] = tmp_df[tmp_df['buy_or_sell']=='S'].price
+        tmp_df1 = tmp_df.drop(columns=['id', 'stock', 'price', 'qty', 'buy_or_sell',
+            'order_id', 'job_id'])
+        tmp_df1.columns = ['date','mode','buy','sell']
+        tmp_df1 = tmp_df1.set_index('date')
+        tmp_df1.index = pd.to_datetime(tmp_df1.index)
+        return tmp_df1
     
     def pushTrade(self, key, df):
         hash_key = key+self.hash_postfix+'Trade'
@@ -82,10 +116,13 @@ class cache_state(Redis):
     def getOHLC(self, key, freq='1D'):
         freq = self.getValue(key, 'freq')
 
-        hash_key = key+self.hash_postfix+'OHLC'
+        #hash_key = key+self.hash_postfix+'OHLC'
         hash_key1 = key+self.hash_postfix+'TICK'
         #df = pd.read_json(self.get(hash_key))
-        df1 =  pd.read_json(self.get(hash_key1))
+        #df1 =  pd.read_json(self.get(hash_key1))
+
+        with pd.HDFStore('data/'+hash_key1, mode="r", key=hash_key1) as f:
+            df1 = pd.read_hdf(f)
 
         tmp_df = df1
         if not tmp_df.empty:
@@ -254,28 +291,19 @@ def get_algo_list(user_id):
     algos = Algos.query.filter(Algos.user_id==user_id).all()
     return [alg.title for alg in algos]
 
-
-from sqlalchemy import Column, Integer, String, create_engine, select
-from sqlalchemy.orm import sessionmaker
-import os
-database_url = os.environ.get('DATABASE_URL')
-
-engine = create_engine(database_url, echo=False)
-#Base = declarative_base(bind=engine)
-Session = sessionmaker(bind=engine)
-session = Session()
-
 #conn = session.bind
 
 def update_trade_log(t, s, p, q, b, e, j):
+
+    #pinfo("update_trade_log # 1")
     job = session.query(Jobs).filter(Jobs.job_id==j).first()
     #pinfo(job.job_id)
-    #pinfo("{},{},{},{},{},{},{}".format(t,s,p,q,b,e,j))
+    #pdebug("{},{},{},{},{},{},{}".format(t,s,p,q,b,e,j))
     job.trades.append(Trades(timestamp=t, stock=s, price=p, qty=q, buy_or_sell=b, en_or_ex=e, order_id=""))
     #session.add(trade)
     try:
         session.commit()
-        #pinfo("update_trade_log")
+        #pinfo("update_trade_log # 2")
     except Exception as e:
         pinfo(e)
 

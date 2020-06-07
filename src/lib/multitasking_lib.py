@@ -821,11 +821,15 @@ def placeorder(prefix, df, hash_key, last_processed):
         tp =  ltp[0] * ( 1 + tp_pt / 100 )
         price = ltp[0] 
         cache.publish('order_handler'+cache_postfix,json.dumps({'cmd':'buy','symbol':hash_key,'price':ltp[0],'qty':qty}))
+        
+        update_trade_log(last_processed, stock, ltp[0], qty, "B", prefix, job_id)
+
     elif prefix == "B: EX: " or prefix == "B: SL: " or prefix == "B: TP: ":
         tmp_df['buy'] = ltp
         profit = (price - ltp[0]) * qty
         pl_pt = profit/price * 100
         cache.publish('order_handler'+cache_postfix,json.dumps({'cmd':'buy','symbol':hash_key,'price':ltp[0],'qty':qty}))
+        update_trade_log(last_processed, stock, ltp[0], qty, "B", prefix, job_id)
         price = 0
     elif prefix == "S: EN: ":
         tmp_df['sell'] = ltp
@@ -833,11 +837,13 @@ def placeorder(prefix, df, hash_key, last_processed):
         tp =  ltp[0] * ( 1 - tp_pt / 100 )
         price = ltp[0] 
         cache.publish('order_handler'+cache_postfix,json.dumps({'cmd':'sell','symbol':hash_key,'price':ltp[0],'qty':qty}))
+        update_trade_log(last_processed, stock, ltp[0], qty, "S", prefix, job_id)
     elif prefix == "S: EX: " or prefix == "S: SL: " or prefix == "S: TP: ":
         tmp_df['sell'] = ltp
         profit = (ltp[0] - price) * qty
         pl_pt = profit/price * 100
         cache.publish('order_handler'+cache_postfix,json.dumps({'cmd':'sell','symbol':hash_key,'price':ltp[0],'qty':qty}))
+        update_trade_log(last_processed, stock, ltp[0], qty, "S", prefix, job_id)
         price = 0
 
     totalprofit = totalprofit + profit
@@ -855,9 +861,8 @@ def placeorder(prefix, df, hash_key, last_processed):
     cache.setValue(hash_key,'Total P&L %', total_pt)
 
     tmp_df['mode'] = prefix
-    cache.pushTrade(hash_key, tmp_df) #TODO
+    #cache.pushTrade(hash_key, tmp_df) #TODO
 
-    update_trade_log(last_processed, stock, price, qty, prefix, prefix, job_id)
 
 
 

@@ -153,7 +153,9 @@ def freedom_chart(hash_key, cache_type, chart_type='haikin'):
 
     dfohlc = my_cache.getOHLC(hash_key)
 
-    trade_df = pd.read_json(redis_conn.get(hash_key+cache_type+'Trade'), orient='columns')
+    #trade_df = pd.read_json(redis_conn.get(hash_key+cache_type+'Trade'), orient='columns')
+    trade_df = my_cache.getTrades(hash_key)
+   # pinfo(trade_df)
 
     trade_df = trade_df.tail(2500) # safety for algo on longer durations
     dfohlc = dfohlc.tail(2500)

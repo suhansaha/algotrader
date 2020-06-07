@@ -11,4 +11,6 @@ src/lib/user_pass.py
 docker-compose-pgadmin.yml
 docker-compose-dev.yml
 db/*
+src/data/*TICK
+src/data/*Trade
 .env
