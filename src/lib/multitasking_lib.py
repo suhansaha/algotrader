@@ -583,7 +583,7 @@ def ohlc_tick_handler(manager, msg):
                     hash_key = stock_id
 
                     if stock_id not in cache.getKeys():
-                        perror('Cache not created for: {}'.format(stock_id))
+                        #perror('Cache not created for: {}'.format(stock_id))
                         continue
 
                     ltp = data['last_price'] # Get LTP from the latest msg

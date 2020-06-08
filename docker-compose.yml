@@ -12,17 +12,19 @@ services:
     restart: always
     environment: 
       - DATABASE_URL=${DATABASE_URL}
-#  ticker:
-#    image: suhansaha/talib_kite-alpine:latest
-#    command: python ticker.py
-#    volumes:
-#      - ./src:/code
-#    expose:
-#      - 5000
-#    depends_on:
-#      - redis
+  ticker:
+    image: suhansaha/talib_kite-alpine:latest
+    command: python ticker.py
+    volumes:
+      - ./src:/code
+    expose:
+      - 5000
+    depends_on:
+      - redis
 #      - live
-#    restart: always
+    restart: always
+    environment: 
+      - DATABASE_URL=${DATABASE_URL}
 #  backtest:
 #    image: suhansaha/talib_kite-alpine
 #    command: python backtest.py

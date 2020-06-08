@@ -344,9 +344,9 @@ def add_row(values, ts, rows, columns):
         for value in values:
             if value not in cache_keys:
                 symbol = value
-                hash_key = symbol+current_user.id
+                hash_key = symbol #+str(current_user.id) #TODO
 
-                live_cache.add(hash_key)
+                live_cache.add(hash_key, reset=True)
                 live_cache.setValue(hash_key,'stock',symbol)
                 live_cache.setValue(hash_key,'qty','1')
                 live_cache.setValue(hash_key,'SL %','0.4')
@@ -355,6 +355,11 @@ def add_row(values, ts, rows, columns):
                 live_cache.setValue(hash_key,'freq','1T')
                 live_cache.setValue(hash_key,'last_processed',datetime.now().timestamp())
                 live_cache.setValue(hash_key,'mode','paper')
+                
+                job_id = "{}-{}".format(int(dt.now().timestamp()*1000000),current_user.id)
+                live_cache.setValue(hash_key, 'job_id', job_id)
+                current_user.jobs.append(Jobs(job_id=job_id, job_type='live', job_status='INIT', job_info=symbol))
+                db.session.commit()
 
                 token = int(live_cache.hmget('eq_token',symbol)[0])
 
@@ -379,14 +384,15 @@ def add_row(values, ts, rows, columns):
                 pass
 
     for index, row in  df_table_new.iterrows():  
+            hash_key = row['stock'] #+str(current_user.id)
             #pinfo("Updated stock: {}".format(row['stock']))
-            live_cache.setValue(row['stock'], 'qty', row['qty'])
-            live_cache.setValue(row['stock'], 'TP %', row['TP %'])
-            live_cache.setValue(row['stock'], 'SL %', row['SL %'])
-            live_cache.setValue(row['stock'], 'algo', row['algo'])
-            live_cache.setValue(row['stock'], 'freq', row['freq'])
-            live_cache.setValue(row['stock'], 'mode', row['mode'])
-            live_cache.setValue(row['stock'], 'state', row['state'])
+            live_cache.setValue(hash_key, 'qty', row['qty'])
+            live_cache.setValue(hash_key, 'TP %', row['TP %'])
+            live_cache.setValue(hash_key, 'SL %', row['SL %'])
+            live_cache.setValue(hash_key, 'algo', row['algo'])
+            live_cache.setValue(hash_key, 'freq', row['freq'])
+            live_cache.setValue(hash_key, 'mode', row['mode'])
+            live_cache.setValue(hash_key, 'state', row['state'])
             # TODO: If mode == Pause, continue getting ticks, only pause tradejob. Live/Paper Trade in Order Placement
 
             
